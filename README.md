@@ -15,8 +15,8 @@ Temporary data from 1988-01-01 to 2017-12-31: https://www.ncdc.noaa.gov/orders/i
 # Importing data to R
 
 ```
+## Note: file should be saved to hard drive because web address is temporary.
 file <- "http://www.ncdc.noaa.gov/orders/isd/1970727539654dat.txt"
-  ## Note: file should be saved to hard drive because web address is temporary.
 ## readLines(file,n=2) ## If you just want to see a couple lines instead of loading all.
 df <- read.delim(file,header=TRUE, sep = "", as.is = TRUE, fill = TRUE)
 ```
