@@ -9,6 +9,7 @@ Use the "Continue With SIMPLIFIED Options" button. Select United States, select 
 # Sample Data (Links expire on 2/2/2018)
 
 Temporary data from 2017-12-01 to 2017-12-31: https://www.ncdc.noaa.gov/orders/isd/CDO1970727539654.html
+
 Temporary data from 1988-01-01 to 2017-12-31: http://www.ncdc.noaa.gov/orders/isd/6980487539681dat.txt
 
 # Importing data to R
