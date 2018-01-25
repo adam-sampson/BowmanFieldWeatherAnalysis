@@ -16,7 +16,7 @@
 
 
 #   Check that necessary packages are installed
-    packages <- c("tidyverse", "lubridate")
+    packages <- c("tidyverse", "lubridate", "xts")
     new_packages <- packages[!(packages %in% installed.packages()[,"Package"])]
     if(length(new_packages)) install.packages(new_packages)
 
@@ -34,4 +34,8 @@
         
 #   Save df dataset 
     save(df, file = "df.Rdata")    
+    
+#   Convert df to timeseries    
+    df_ts <- xts(df[,-1], order.by = df[,3])
+    
     
