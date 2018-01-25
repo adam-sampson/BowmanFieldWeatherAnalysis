@@ -24,7 +24,7 @@
     sapply(packages, require, character.only = TRUE)
 
 #   Note: file should be saved to hard drive because web address is temporary.
-    file <- "http://www.ncdc.noaa.gov/orders/isd/1970727539654dat.txt"
+    file <- "BowmanField_1988-2017_dat.txt"
 #   readLines(file,n=2) ## If you just want to see a couple lines instead of loading all.
     df <- read.delim(file,header=TRUE, sep = "", as.is = TRUE, fill = TRUE)
     
@@ -34,3 +34,4 @@
         
 #   Save df dataset 
     save(df, file = "df.Rdata")    
+    
