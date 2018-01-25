@@ -10,12 +10,12 @@ Use the "Continue With SIMPLIFIED Options" button. Select United States, select 
 
 Temporary data from 2017-12-01 to 2017-12-31: https://www.ncdc.noaa.gov/orders/isd/CDO1970727539654.html
 
-Temporary data from 1988-01-01 to 2017-12-31: http://www.ncdc.noaa.gov/orders/isd/6980487539681dat.txt
+Temporary data from 1988-01-01 to 2017-12-31: https://www.ncdc.noaa.gov/orders/isd/CDO6980487539681.html (order pending as of 1/25/2018 @ 11:07AM local)
 
 # Importing data to R
 
 ```
-file <- "http://www.ncdc.noaa.gov/orders/isd/6980487539681dat.txt"
+file <- "http://www.ncdc.noaa.gov/orders/isd/1970727539654dat.txt"
 readLines(file,n=2)
 df <- read.delim(file,header=TRUE, sep = "", as.is = TRUE, fill = TRUE)
 ```
