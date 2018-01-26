@@ -11,7 +11,12 @@
   #   Load Neccessary Packages
   sapply(packages, require, character.only = TRUE)
   rm(new_packages)
-    
+
+#---
+# Load Saved Data from current working directory
+#---
+  load("df.Rdata")
+  
 #---
 # Replace missing values
 #---
