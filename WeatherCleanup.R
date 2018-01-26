@@ -16,6 +16,9 @@
 # Replace missing values
 #---
   clean.df <- df
+  
+  clean.df[clean.df[,"CLG"]=="722","CLG"] <- Inf
+  
   for(col in names(clean.df)) {
     clean.df[,col] <- str_replace_all(clean.df[,col],"^[*]+$","NA")
     clean.df[clean.df[,col]=="NA",col] <- NA
@@ -23,7 +26,7 @@
   
 #---
 # Generate stats about variables
-*---
+#---
   clean.df.stats <- list()
   
   ## Determine what percent of a variable is NA
