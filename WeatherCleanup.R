@@ -39,7 +39,7 @@
   for(col in names(clean.df)) {
     clean.df.stats[["na_percent"]][col] <- 100*sum(is.na(clean.df[,col]))/length(clean.df[,col])
   }
-  clean.df.stats$na_percent
+  # clean.df.stats$na_percent
   
 #---
 # Fix variable types
@@ -51,4 +51,11 @@
     clean.df[col] <- as.numeric(unlist(clean.df[col]))
   }
   rm(numeric.var)
+
+#---
+# Remove variables with very little information
+#---
+  colsToKeep <- c("WBAN","DATE_TIME","TEMP","DEWP","DIR","SPD","GUS","CLG","SKC","VSB","PCP01","SD")
+  clean.df <- clean.df[,colsToKeep]
+  rm(colsToKeep)  
   
