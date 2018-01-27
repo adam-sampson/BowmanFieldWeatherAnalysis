@@ -21,6 +21,7 @@
 # Replace missing values
 #---
   clean.df <- df
+  rm(df)
   
   clean.df[clean.df[,"CLG"]=="722","CLG"] <- Inf
   
@@ -58,4 +59,11 @@
   colsToKeep <- c("WBAN","DATE_TIME","TEMP","DEWP","DIR","SPD","GUS","CLG","SKC","VSB","PCP01","SD")
   clean.df <- clean.df[,colsToKeep]
   rm(colsToKeep)  
-  
+
+#---
+# Convert to time data
+#---
+  clean.df.ts <- xts(clean.df, order.by = clean.df$DATE_TIME)
+  #clean.df.ts <- ts(data = clean.df, start=c(1988,01,01))
+  #rm(clean.df)
+  #df_ts <- xts(df[,-1], order.by = df[,3])
