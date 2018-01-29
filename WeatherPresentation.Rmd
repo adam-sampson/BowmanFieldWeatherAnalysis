@@ -9,6 +9,7 @@ output: ioslides_presentation
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = FALSE)
 source('WeatherCleanup.R')
+require(dygraphs)
 ```
 
 ## The Data
@@ -27,6 +28,9 @@ End Date: December 31, 2017
 ## Visualizing Temperatures
 
 ```{r}
-ts.plot(clean.df.ts$TEMP)
+dygraph(clean.df.ts$TEMP, 
+        main="Louisville Airport Tempuratures.",
+        ylab = "Temp (F)") %>% 
+  dyRangeSelector(dateWindow = c("2012-01-01","2017-12-31"))
 ```
 
