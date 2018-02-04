@@ -48,7 +48,7 @@
 #---
   clean.df$DATE_TIME <- ymd_hms(clean.df$DATE_TIME)
   
-  numeric.var <- c("DIR","SPD","GUS","CLG","VSB","TEMP","DEWP","ALT","PCP01","SD")
+  numeric.var <- c("WBAN","DIR","SPD","GUS","CLG","VSB","TEMP","DEWP","ALT","PCP01","SD")
   for(col in numeric.var) {
     clean.df[col] <- as.numeric(unlist(clean.df[col]))
   }
@@ -65,8 +65,8 @@
 # Convert to time data
 #---
   #df.xts <- xts(clean.df, order.by = clean.df$DATE_TIME)
-  df.zoo <- zoo(clean.df[,-1], order.by = clean.df[,2])
+  df.zoo <- zoo(clean.df[,-2], order.by = clean.df[,2])
   
-  plot(x=index(df.zoo),y=as.numeric(df.zoo$TEMP))
+  # plot(x=index(df.zoo),y=as.numeric(df.zoo$TEMP))
 
   
