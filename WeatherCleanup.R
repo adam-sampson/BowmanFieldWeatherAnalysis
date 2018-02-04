@@ -57,7 +57,7 @@
 #---
 # Remove variables with very little information
 #---
-  colsToKeep <- c("WBAN","DATE_TIME","TEMP","DEWP","DIR","SPD","GUS","CLG","VSB","PCP01","SD")
+  colsToKeep <- c("USAF","WBAN","DATE_TIME","TEMP","DEWP","DIR","SPD","GUS","CLG","VSB","PCP01","SD")
   clean.df <- clean.df[,colsToKeep]
   rm(colsToKeep)  
 

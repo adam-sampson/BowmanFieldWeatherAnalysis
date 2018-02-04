@@ -1,0 +1,161 @@
+---
+title: "Louisville Weather Analysis"
+output: 
+  html_notebook:
+    toc: true
+---
+
+## Louisville Weather Time Series Analysis
+
+There is a lot of news about climate change and strange temperatures this year. In some areas with have the "bomb cyclone", and in other we have drought conditions. Living in Louisville I decided to take some time to see what the local data actually shows about trends in weather. 
+
+For this analysis I will be using a few packages which you will need loaded in order to follow along:
+```{r}
+# List of packages to load:
+packages <- c("tidyverse", "lubridate", "xts", "zoo", "stringr", "dygraphs")
+  
+# Check to see whether any packages aren't installed on the computer and install
+new_packages <- packages[!(packages %in% installed.packages()[,"Package"])]
+if(length(new_packages)) install.packages(new_packages)
+  
+# Load Neccessary Packages
+sapply(packages, require, character.only = TRUE)
+rm(new_packages)
+```
+
+
+## Data Collection and Import
+
+The National Climate Data Center (NCDC) and National Centers for Environmental Information (NCEI) provides access to hourly weather data from the National Oceanic and Atmospheric Administration (NOAA) at [https://www7.ncdc.noaa.gov/CDO/cdopoemain.cmd?datasetabbv=DS3505&countryabbv=&georegionabbv=&resolution=40](https://www7.ncdc.noaa.gov/CDO/cdopoemain.cmd?datasetabbv=DS3505&countryabbv=&georegionabbv=&resolution=40) (Valid as of 02/04/2018 but slated for obsolecense in May of 2018). This form is the fastest way to get clean data. The link automatically cleans the data into a person readable format. So for ease of use I put in a request for the data I wanted and then downloaded the txt files.
+
+There is also a link to Automated Weather Observing System (AWOS) at [https://www.ncdc.noaa.gov/data-access/land-based-station-data/land-based-datasets/automated-weather-observing-system-awos](https://www.ncdc.noaa.gov/data-access/land-based-station-data/land-based-datasets/automated-weather-observing-system-awos). This allows direct FTP access at [ftp://ftp.ncdc.noaa.gov/pub/data/noaa/](ftp://ftp.ncdc.noaa.gov/pub/data/noaa/). However, this data is not as clean as the data in the first paragraph above.
+
+* Bowman Field Airport is Station ID 72423513810 and has data from 11/1941 to 02/2018 with a gap from 2000 to 2003. 
+* Bownam Fld is Station ID 72423599999 and has data from 01/2000 to 12/2003.
+
+* Louisville Standiford Field is ID 99999993821 and has data from 01/1948 to 12/1972. 
+* Louisville Intl_Standiford Field AP is ID 72423093821 and has data from 01/1973 to 02/2018
+* ***Warning: I asked a local expert about this station and he said the gage is too close to the asphalt and gives biased readings.***
+
+* Lexington Bluegrass Field is ID 99999993820 and has data from 01/2948 to 12/1972
+* Bluegrass Airport is ID 72422093820 and has data from 01/1973 to 02/2018. 
+* *Lexington is technically outside of Louisville, but provides a reasonably analogous data set which may be better than using the Louisville Airport data due to placement of the gages.*
+
+### Downloading data from the site
+
+I put in the following requests on the site: 
+
+* US, Kentucky, Bowman Field, 2000_01_01_00 to 2003_12_31_23.
+* US, Kentucky, Bownam Field, 1942_01_01_00 to 2018_02_01_23
+
+After a few minutes the website processed the website will process the file. Download the file to the working directory and then import the data to R.
+
+
+```{r}
+# Import Date
+file <- c("6857057546977dat.txt")
+df1 <- read.delim(file,header=TRUE, sep = "", as.is = TRUE, fill = TRUE)
+file <- c("9063637546978dat.txt")
+df2 <- read.delim(file,header=TRUE, sep = "", as.is = TRUE, fill = TRUE)
+
+# Remove year 2000 thru 2003 from df2
+df2 <- df2 %>% filter(YR..MODAHRMN < 200001010146 | YR..MODAHRMN > 200312312353)
+
+# Join the data frames together
+df <- full_join(df2,df1)
+  rm(df1,df2)
+  
+# Make the YR..MODAHRMN easier to read
+colnames(df)[3] <- "DATE_TIME"
+```
+
+### Fix missing values and values with non-numeric meanings
+
+```{r}
+clean.df <- df
+
+# If CLG value is 722 it means Infinite according to documentation
+clean.df[clean.df[,"CLG"]=="722","CLG"] <- Inf
+
+# Replace missing values marked by * with NA
+for(col in names(clean.df)) {
+    clean.df[,col] <- str_replace_all(clean.df[,col],"^[*]+$","NA")
+    clean.df[clean.df[,col]=="NA",col] <- NA
+  }
+  rm(col)
+  
+#---
+# Generate stats about variables
+#---
+  clean.df.stats <- list()
+
+  ## Determine what percent of a variable is NA
+  clean.df.stats[["na_percent"]] <- list()
+  for(col in names(clean.df)) {
+    clean.df.stats[["na_percent"]][col] <- 100*sum(is.na(clean.df[,col]))/length(clean.df[,col])
+  }
+  # clean.df.stats$na_percent
+```
+
+### Fix variable types in the data
+
+Two operations need to be performed to fix the variables types.
+
+First, the DATE_TIME field should be in date format.
+
+Second, the numeric items should be in numeric format
+
+* Note: Any fields with a character will be coerced to NA. In this case it is a good thing because a character in a numeric field indicates there was some anomaly with the data.
+
+```{r}
+# DATE_TIME should be in a date format of ymd_hm
+clean.df$DATE_TIME <- ymd_hm(clean.df$DATE_TIME)
+  
+# The following fields are numberic data (or close enough)
+numeric.var <- c("USAF", "WBAN","DIR","SPD","GUS","CLG","VSB","TEMP","DEWP","ALT","PCP01","SD")
+for(col in numeric.var) {
+  clean.df[col] <- as.numeric(unlist(clean.df[col]))
+}
+rm(numeric.var)
+```
+
+### Only keep the columns needed for the analysis
+
+For this analysis we will only be using numeric data. Coincidentally, this helps with the zoo package. Zoo uses a matrix format and all columns must be the same data type. By only keeping numeric columns we can leave all the data in numeric format. This means we won't have to use as.numeric() every time we use the data in a function. However, you may want to go ahead and use this in order to keep your code robust.
+
+```{r}
+colsToKeep <- c("USAF","WBAN","DATE_TIME","TEMP","DEWP","DIR","SPD","GUS","CLG","VSB","PCP01","SD")
+clean.df <- clean.df[,colsToKeep]
+rm(colsToKeep)  
+rm(df)
+```
+
+### Create a time series object using the zoo package
+
+It is easy to create a zoo object for time series analysis. 
+
+```{r}
+df.zoo <- zoo(clean.df[,-3], order.by = clean.df[,3])
+```
+
+Now let's plot the data to see that we have all the data in the set and that it is working.
+
+```{r}
+plot(df.zoo$TEMP)
+```
+
+A problem!!! Lots of data is missing before January 1, 1973. But that's ok, we can just use the data we have for this analysis.
+
+```{r}
+clean.df <- clean.df %>% filter(DATE_TIME > as.Date("1973-01-01"))
+df.zoo <- window(df.zoo, start = as.Date("1973-01-01"), end = end(df.zoo))
+```
+
+Now let's plot the data again...
+
+```{r}
+plot(df.zoo$TEMP)
+```
+
+## Begin the time-series analysis
+
