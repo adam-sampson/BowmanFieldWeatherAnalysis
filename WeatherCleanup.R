@@ -5,7 +5,7 @@
 #---
 # Load Packages
 #---
-  packages <- c("tidyverse", "lubridate", "xts", "stringr", "dygraphs")
+  packages <- c("tidyverse", "lubridate", "xts", "zoo", "stringr", "dygraphs")
   new_packages <- packages[!(packages %in% installed.packages()[,"Package"])]
   if(length(new_packages)) install.packages(new_packages)
   #   Load Neccessary Packages
@@ -29,6 +29,7 @@
     clean.df[,col] <- str_replace_all(clean.df[,col],"^[*]+$","NA")
     clean.df[clean.df[,col]=="NA",col] <- NA
   }
+  rm(col)
   
 #---
 # Generate stats about variables
@@ -47,7 +48,7 @@
 #---
   clean.df$DATE_TIME <- ymd_hms(clean.df$DATE_TIME)
   
-  numeric.var <- c("DIR","SPD","GUS","CLG","VSB","TEMP","DEWP","ALT")
+  numeric.var <- c("DIR","SPD","GUS","CLG","VSB","TEMP","DEWP","ALT","PCP01","SD")
   for(col in numeric.var) {
     clean.df[col] <- as.numeric(unlist(clean.df[col]))
   }
@@ -56,14 +57,16 @@
 #---
 # Remove variables with very little information
 #---
-  colsToKeep <- c("WBAN","DATE_TIME","TEMP","DEWP","DIR","SPD","GUS","CLG","SKC","VSB","PCP01","SD")
+  colsToKeep <- c("WBAN","DATE_TIME","TEMP","DEWP","DIR","SPD","GUS","CLG","VSB","PCP01","SD")
   clean.df <- clean.df[,colsToKeep]
   rm(colsToKeep)  
 
 #---
 # Convert to time data
 #---
-  clean.df.ts <- xts(clean.df, order.by = clean.df$DATE_TIME)
-  #clean.df.ts <- ts(data = clean.df, start=c(1988,01,01))
-  #rm(clean.df)
-  #df_ts <- xts(df[,-1], order.by = df[,3])
+  #df.xts <- xts(clean.df, order.by = clean.df$DATE_TIME)
+  df.zoo <- zoo(clean.df[,-1], order.by = clean.df[,2])
+  
+  plot(x=index(df.zoo),y=as.numeric(df.zoo$TEMP))
+
+  
