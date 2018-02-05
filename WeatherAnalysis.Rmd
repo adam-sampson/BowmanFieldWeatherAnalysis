@@ -12,7 +12,7 @@ There is a lot of news about climate change and strange temperatures this year. 
 For this analysis I will be using a few packages which you will need loaded in order to follow along:
 ```{r}
 # List of packages to load:
-packages <- c("tidyverse", "lubridate", "xts", "zoo", "stringr", "dygraphs")
+packages <- c("tidyverse", "lubridate", "xts", "zoo", "stringr", "dygraphs", "forecast")
   
 # Check to see whether any packages aren't installed on the computer and install
 new_packages <- packages[!(packages %in% installed.packages()[,"Package"])]
@@ -158,4 +158,25 @@ plot(df.zoo$TEMP)
 ```
 
 ## Begin the time-series analysis
+
+Now that the data has been imported, it is time to decompose the elements of the weather data into seasonal, trend, and random. 
+
+Based on the graph above it appears likely that an additive decomposition will be sufficient as the variation does not appear to be increasing over time.
+
+### Detect the trend
+
+For this data we expect to see a yearly seasonality becauase weather data is literally seasonal. 
+
+To calculate approximately yearly data (barring na values) it is possible to multiple 24 hours per day times 365.25 days per year
+
+```{r}
+#frequency(df.zoo)
+
+#trend.df.temp <- ma(df.zoo$TEMP, order = 24*365.25, centre = TRUE)
+#plot(as.ts(df.zoo$TEMP)) +
+#  lines(trend.df.temp, col = "red")
+#plot(trend.df.temp, col = "red")
+
+#df.decomp <- decompose(df.zoo$TEMP, type = "additive")
+```
 
