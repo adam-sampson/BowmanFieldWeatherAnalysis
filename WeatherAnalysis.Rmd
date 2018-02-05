@@ -206,9 +206,11 @@ Egad! Data for recent years is not periodic! We need to aggregate our data into 
 In order to do simple trend analysis it is necessary to have roughly the same number of points of data per year. Otherwise we will need more complex methods. Let's aggregate.
 
 ```{r}
-temp.hourly <- to.hourly(df.zoo$TEMP)
-temp.hourly <- temp.hourly$`df.zoo$TEMP.Close`
-plot(temp.hourly)
+temp.hourly <- period.apply(df.zoo$TEMP,
+                             endpoints(df.zoo$TEMP, 'hours'),
+                             mean)
+# Round down to get hours from 0 to 23 and drop minutes
+index(temp.hourly) <- trunc(index(temp.hourly), units = 'hours')
 
 head(temp.hourly[year(index(temp.hourly)) == 1973], n=20)
 head(temp.hourly[year(index(temp.hourly)) == 2017], n=20)
@@ -219,7 +221,8 @@ head(temp.hourly[year(index(temp.hourly)) == 2017], n=20)
 Now that we have hourly data, let's try the trend code again.
 
 ```{r}
-temp.trend <- rollmean(x = temp.hourly, k=24*365.25)
+temp.trend <- rollmean(x = na.approx(temp.hourly), k=24*365.25)
+# plot(temp.trend)
 
 plot(df.zoo$TEMP)  
   lines(temp.trend, col = "red")
