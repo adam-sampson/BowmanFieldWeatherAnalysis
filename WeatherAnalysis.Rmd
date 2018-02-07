@@ -224,7 +224,79 @@ Now that we have hourly data, let's try the trend code again.
 temp.trend <- rollmean(x = na.approx(temp.hourly), k=24*365.25)
 # plot(temp.trend)
 
-plot(df.zoo$TEMP)  
+plot(temp.hourly)  
   lines(temp.trend, col = "red")
 ```
 
+## Fill in missing dates to prevent odd trend from missing data
+
+It is possible that missing elements are also causing problems because we are defining an environmental year as 24 hours times 365.25 days but some hours are missing.
+
+```{r}
+hours <- seq(start(temp.hourly),end(temp.hourly),by="hour")
+hours <- as.POSIXlt(hours)
+temp.full.hourly <- merge(temp.hourly,zoo(,hours),all = TRUE)
+# For some reason some extra hours were added before the data...
+  temp.full.hourly <- temp.full.hourly[6:length(temp.full.hourly),]
+```
+
+Now the times have been created, but they are NA. Need to fill them in.
+
+```{r}
+temp.full.hourly <- na.approx(temp.full.hourly)
+```
+
+Now, let's try plotting again...
+
+```{r}
+temp.full.trend <- rollmean(x = temp.full.hourly, k=24*365.25)
+# plot(temp.trend)
+
+par(mfrow=c(2,1))
+plot(temp.full.hourly)  
+  lines(temp.full.trend, col = "red")
+plot(temp.full.trend, col = "red")
+```
+
+## Now let's decompose the cleaner data
+
+```{r fig.height = 7, fig.width = 8}
+temp.full.ts <- ts(temp.full.hourly, frequency = 24*365.25, start = c(1973, 1))
+
+temp.full.decomp <- decompose(temp.full.ts, type = "multiplicative")
+par(mfrow=c(4,1))
+plot(temp.full.decomp$trend)
+plot(temp.full.decomp$seasonal)
+plot(temp.full.decomp$random)
+plot(temp.full.decomp$figure)
+```
+
+The random plot clearly is not random...but what could it be? Let's try night/day variation. One hypothesis is that there is more variation between high/low temperature during the winter than there is during the summer. Let's put it to the test.
+
+## Decomposing night/day variation
+
+Let's first try to decompose the night/day (aka 24 hour trend) using the full data set.
+
+```{r fig.height = 7, fig.width = 8}
+temp.full.ts <- ts(temp.full.hourly, frequency = 24, start = c(1973, 1))
+
+temp.full.decomp <- decompose(temp.full.ts, type = "multiplicative")
+par(mfrow=c(4,1))
+plot(temp.full.decomp$trend)
+plot(temp.full.decomp$seasonal)
+plot(temp.full.decomp$random)
+plot(temp.full.decomp$figure)
+```
+
+Now, let's use the trend left over from the daily to decompose for the yearly.
+
+```{r fig.height = 7, fig.width = 8}
+temp.full.ts <- ts(temp.full.decomp$trend, frequency = 24*365.25)
+
+temp.full.decomp <- decompose(temp.full.ts, type = "multiplicative")
+par(mfrow=c(4,1))
+plot(temp.full.decomp$trend)
+plot(temp.full.decomp$seasonal)
+plot(temp.full.decomp$random)
+plot(temp.full.decomp$figure)
+```
