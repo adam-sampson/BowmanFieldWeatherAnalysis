@@ -1,0 +1,55 @@
+---
+title: "Term 4 - Time Series Group Project - Air Quality "
+author: "Jay Bektasevic, Andrew Brill, Adam Sampson, Brenden McGale, Taylor Maxon"
+date: "February 9, 2018"
+output: 
+  prettydoc::html_pretty:
+    theme: architect
+    highlight: github
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+###  Load Required Packages and Files  
+
+```{r message=FALSE, warning=FALSE, results='hide'}
+#   Check that necessary packages are installed
+    packages <- c("tidyverse", "lubridate", "xts")
+    new_packages <- packages[!(packages %in% installed.packages()[,"Package"])]
+    if(length(new_packages)) install.packages(new_packages)
+
+#   Load Neccessary Packages
+    sapply(packages, require, character.only = TRUE)
+```
+
+
+
+###  Collect Data
+Data was aquired from the EPA website there are several monitoring stations in Jefferson County.
+```{r message=FALSE, warning=FALSE, paged.print=FALSE}
+#   Gather all the files in the directory
+    temp <- list.files(pattern="*.csv")
+    
+#   Read in all the files and bind them together    
+    EPA_data <- lapply(temp, function(x) read.csv(x, stringsAsFactors = FALSE)) %>% bind_rows()
+    
+    save(EPA_data, file = "EPA.Rdata")
+
+```
+
+###  Exploratory Analysis
+
+```{r}
+  summary(EPA_data)
+
+EPA_ts <- EPA_data %>% select(Date, Measurement, DAILY_AQI_VALUE, DAILY_OBS_COUNT, AQS_PARAMETER_CODE )
+
+EPA_ts <- ts(EPA_ts, start = c(1990, 1), end = c(2017,12),  frequency = 365)
+
+plot(EPA_ts)
+
+```
+
