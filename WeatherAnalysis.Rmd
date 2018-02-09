@@ -1,0 +1,302 @@
+---
+title: "Louisville Weather Analysis"
+output:
+  pdf_document:
+    toc: yes
+  html_notebook:
+    toc: yes
+---
+
+## Louisville Weather Time Series Analysis
+
+There is a lot of news about climate change and strange temperatures this year. In some areas with have the "bomb cyclone", and in other we have drought conditions. Living in Louisville I decided to take some time to see what the local data actually shows about trends in weather. 
+
+For this analysis I will be using a few packages which you will need loaded in order to follow along:
+```{r echo=TRUE, results='hide', message=FALSE, error=FALSE}
+# List of packages to load:
+packages <- c("tidyverse", "lubridate", "xts", "zoo", "stringr", "dygraphs", "forecast", "xts")
+  
+# Check to see whether any packages aren't installed on the computer and install
+new_packages <- packages[!(packages %in% installed.packages()[,"Package"])]
+if(length(new_packages)) install.packages(new_packages)
+  
+# Load Neccessary Packages
+sapply(packages, require, character.only = TRUE)
+rm(new_packages)
+```
+
+
+## Data Collection and Import
+
+The National Climate Data Center (NCDC) and National Centers for Environmental Information (NCEI) provides access to hourly weather data from the National Oceanic and Atmospheric Administration (NOAA) at [https://www7.ncdc.noaa.gov/CDO/cdopoemain.cmd?datasetabbv=DS3505&countryabbv=&georegionabbv=&resolution=40](https://www7.ncdc.noaa.gov/CDO/cdopoemain.cmd?datasetabbv=DS3505&countryabbv=&georegionabbv=&resolution=40) (Valid as of 02/04/2018 but slated for obsolecense in May of 2018). This form is the fastest way to get clean data. The link automatically cleans the data into a person readable format. So for ease of use I put in a request for the data I wanted and then downloaded the txt files.
+
+* Bowman Field Airport is Station ID 72423513810 and has data from 11/1941 to 02/2018 with a gap from 2000 to 2003. 
+* Bownam Fld is Station ID 72423599999 and has data from 01/2000 to 12/2003.
+
+* Louisville Standiford Field is ID 99999993821 and has data from 01/1948 to 12/1972. 
+* Louisville Intl_Standiford Field AP is ID 72423093821 and has data from 01/1973 to 02/2018
+* ***Warning: I asked a local expert about this station and he said the gage is too close to the asphalt and gives biased readings.***
+
+* Lexington Bluegrass Field is ID 99999993820 and has data from 01/2948 to 12/1972
+* Bluegrass Airport is ID 72422093820 and has data from 01/1973 to 02/2018. 
+* *Lexington is technically outside of Louisville, but provides a reasonably analogous data set which may be better than using the Louisville Airport data due to placement of the gages.*
+
+### Downloading data from the site
+
+I put in the following requests on the site: 
+
+* US, Kentucky, Bluegrass Airport, 1973_01_01_00 to 2008_01_01_23.
+
+After a few minutes the website processed the website will process the file. Download the file to the working directory and then import the data to R.
+
+
+```{r echo=TRUE, results='hide', message=FALSE, error=FALSE}
+# Let's use Lexington data because it is continuous since 1973
+file <- c("5157227547406dat.txt")
+df <- read.delim(file,header=TRUE, sep = "", as.is = TRUE, fill = TRUE)
+  
+# Make the YR..MODAHRMN easier to read
+colnames(df)[3] <- "DATE_TIME"
+```
+
+### Fix missing values and values with non-numeric meanings
+
+```{r}
+clean.df <- df
+
+# If CLG value is 722 it means Infinite according to documentation
+clean.df[clean.df[,"CLG"]=="722","CLG"] <- Inf
+
+# Replace missing values marked by * with NA
+for(col in names(clean.df)) {
+    clean.df[,col] <- str_replace_all(clean.df[,col],"^[*]+$","NA")
+    clean.df[clean.df[,col]=="NA",col] <- NA
+  }
+  rm(col)
+  
+#---
+# Generate stats about variables
+#---
+  clean.df.stats <- list()
+
+  ## Determine what percent of a variable is NA
+  clean.df.stats[["na_percent"]] <- list()
+  for(col in names(clean.df)) {
+    clean.df.stats[["na_percent"]][col] <- 100*sum(is.na(clean.df[,col]))/length(clean.df[,col])
+  }
+  # clean.df.stats$na_percent
+```
+
+### Fix variable types in the data
+
+Two operations need to be performed to fix the variables types.
+
+First, the DATE_TIME field should be in date format.
+
+Second, the numeric items should be in numeric format
+
+* Note: Any fields with a character will be coerced to NA. In this case it is a good thing because a character in a numeric field indicates there was some anomaly with the data.
+
+```{r echo=TRUE, results='hide', message=FALSE, error=FALSE}
+# DATE_TIME should be in a date format of ymd_hm
+clean.df$DATE_TIME <- ymd_hm(clean.df$DATE_TIME)
+  
+# The following fields are numberic data (or close enough)
+numeric.var <- c("USAF", "WBAN","DIR","SPD","GUS","CLG","VSB","TEMP","DEWP","ALT","PCP01","SD")
+for(col in numeric.var) {
+  clean.df[col] <- as.numeric(unlist(clean.df[col]))
+}
+rm(numeric.var)
+```
+
+### Only keep the columns needed for the analysis
+
+For this analysis we will only be using numeric data. Coincidentally, this helps with the zoo package. Zoo uses a matrix format and all columns must be the same data type. By only keeping numeric columns we can leave all the data in numeric format. This means we won't have to use as.numeric() every time we use the data in a function. However, you may want to go ahead and use this in order to keep your code robust.
+
+```{r}
+colsToKeep <- c("USAF","WBAN","DATE_TIME","TEMP","DEWP","DIR","SPD","GUS","CLG","VSB","PCP01","SD")
+clean.df <- clean.df[,colsToKeep]
+rm(colsToKeep)  
+rm(df)
+```
+
+### Create a time series object using the zoo package
+
+It is easy to create a zoo object for time series analysis. 
+
+```{r}
+df.zoo <- zoo(clean.df[,-3], order.by = clean.df[,3])
+```
+
+Now let's plot the data to see that we have all the data in the set and that it is working.
+
+```{r}
+plot(df.zoo$TEMP)
+```
+
+## Begin the time-series analysis on TEMP
+
+Now that the data has been imported, it is time to decompose the elements of the weather data into seasonal, trend, and random. 
+
+Based on the graph above it appears likely that an additive decomposition will be sufficient as the variation does not appear to be increasing over time.
+
+### Detect the trend
+
+For this data we expect to see a yearly seasonality becauase weather data is literally seasonal. 
+
+To calculate approximately yearly data (barring na values) it is possible to multiple 24 hours per day times 365.25 days per year
+
+```{r}
+# Bring the data into a zoo object with frequency = yearly
+df.zoo <- zoo(clean.df[,-3], order.by = clean.df[,3], frequency = 24*365.25)
+temp <- df.zoo$TEMP
+
+# Rolling average may have issues with NA...so let's deal with missing values.
+# temp <- na.approx(temp)
+temp <- na.omit(temp)
+
+temp.trend <- rollmean(x = temp, k=24*365.25)
+
+plot(df.zoo$TEMP)  
+  lines(temp.trend, col = "red")
+
+# Let's see if we get the same thing by using the decompose function
+temp.ts <- ts(temp, frequency = 24*365.25, start = c(1973, 1))
+
+df.decomp <- decompose(temp.ts, type = "multiplicative")
+plot(df.decomp$x, ann = FALSE)
+lines(df.decomp$trend, col = "red")
+title(main = "TEMP over time with trend in red",
+      ylab = "TEMP",
+      xlab = "Year")
+
+# plot(df.decomp$seasonal)
+# plot(df.decomp$random)
+# plot(df.decomp$figure)
+
+```
+
+# Strange seasonality still left in trend
+
+Apparently there are different quantities of data in the years 1997 to 2018? Let's find out.
+
+```{r}
+paste("1975 data points: ", length(df.zoo[year(index(df.zoo)) == 1975]))
+paste("2017 data points: ", length(df.zoo[year(index(df.zoo)) == 2017]))
+```
+
+There's the problem. Recent years have more data points for some reason...So the calculation of year is not 24*365.25 for every year...
+
+```{r}
+103444 / (24*365.25)
+145233 / (24*365.25)
+```
+
+Now it is necessary to find out why...
+
+```{r}
+head(df.zoo[year(index(df.zoo)) == 1973], n=20)
+head(df.zoo[year(index(df.zoo)) == 2017], n=20)
+```
+
+Egad! Data for recent years is not periodic! We need to aggregate our data into hourly.
+
+## Aggregating data into hourly data
+
+In order to do simple trend analysis it is necessary to have roughly the same number of points of data per year. Otherwise we will need more complex methods. Let's aggregate.
+
+```{r}
+temp.hourly <- period.apply(df.zoo$TEMP,
+                             endpoints(df.zoo$TEMP, 'hours'),
+                             mean)
+# Round down to get hours from 0 to 23 and drop minutes
+index(temp.hourly) <- trunc(index(temp.hourly), units = 'hours')
+
+head(temp.hourly[year(index(temp.hourly)) == 1973], n=20)
+head(temp.hourly[year(index(temp.hourly)) == 2017], n=20)
+```
+
+## Try to find trend again...
+
+Now that we have hourly data, let's try the trend code again.
+
+```{r}
+temp.trend <- rollmean(x = na.approx(temp.hourly), k=24*365.25)
+# plot(temp.trend)
+
+plot(temp.hourly)  
+  lines(temp.trend, col = "red")
+```
+
+## Fill in missing dates to prevent odd trend from missing data
+
+It is possible that missing elements are also causing problems because we are defining an environmental year as 24 hours times 365.25 days but some hours are missing.
+
+```{r}
+hours <- seq(start(temp.hourly),end(temp.hourly),by="hour")
+hours <- as.POSIXlt(hours)
+temp.full.hourly <- merge(temp.hourly,zoo(,hours),all = TRUE)
+# For some reason some extra hours were added before the data...
+  temp.full.hourly <- temp.full.hourly[6:length(temp.full.hourly),]
+```
+
+Now the times have been created, but they are NA. Need to fill them in.
+
+```{r}
+temp.full.hourly <- na.approx(temp.full.hourly)
+```
+
+Now, let's try plotting again...
+
+```{r}
+temp.full.trend <- rollmean(x = temp.full.hourly, k=24*365.25)
+# plot(temp.trend)
+
+par(mfrow=c(2,1))
+plot(temp.full.hourly)  
+  lines(temp.full.trend, col = "red")
+plot(temp.full.trend, col = "red")
+```
+
+## Now let's decompose the cleaner data
+
+```{r fig.height = 7, fig.width = 8}
+temp.full.ts <- ts(temp.full.hourly, frequency = 24*365.25, start = c(1973, 1))
+
+temp.full.decomp <- decompose(temp.full.ts, type = "multiplicative")
+par(mfrow=c(4,1))
+plot(temp.full.decomp$trend)
+plot(temp.full.decomp$seasonal)
+plot(temp.full.decomp$random)
+plot(temp.full.decomp$figure)
+```
+
+The random plot clearly is not random...but what could it be? Let's try night/day variation. One hypothesis is that there is more variation between high/low temperature during the winter than there is during the summer. Let's put it to the test.
+
+## Decomposing night/day variation
+
+Let's first try to decompose the night/day (aka 24 hour trend) using the full data set.
+
+```{r fig.height = 7, fig.width = 8}
+temp.full.ts <- ts(temp.full.hourly, frequency = 24, start = c(1973, 1))
+
+temp.full.decomp <- decompose(temp.full.ts, type = "multiplicative")
+par(mfrow=c(4,1))
+plot(temp.full.decomp$trend)
+plot(temp.full.decomp$seasonal)
+plot(temp.full.decomp$random)
+plot(temp.full.decomp$figure)
+```
+
+Now, let's use the trend left over from the daily to decompose for the yearly.
+
+```{r fig.height = 7, fig.width = 8}
+temp.full.ts <- ts(temp.full.decomp$trend, frequency = 24*365.25)
+
+temp.full.decomp <- decompose(temp.full.ts, type = "multiplicative")
+par(mfrow=c(4,1))
+plot(temp.full.decomp$trend)
+plot(temp.full.decomp$seasonal)
+plot(temp.full.decomp$random)
+plot(temp.full.decomp$figure)
+```

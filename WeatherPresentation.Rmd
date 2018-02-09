@@ -1,0 +1,36 @@
+---
+title: <centered>Weather Analysis</centered>
+author: "Adam Sampson, Jay Bektasevic, Brenden McGale, Andrew Brill, Taylor Maxson"
+abstract: "An analysis of weather data collected at Bowman Field, Louisville Ky."
+date: "January 27, 2018"
+output: ioslides_presentation
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+source('WeatherCleanup.R')
+require(dygraphs)
+```
+
+## The Data
+
+Weather data was collected from *NNDC Climate Data Online* 
+https://www7.ncdc.noaa.gov/CDO/cdopoemain.cmd
+
+Location: Bowman Field, Louisville KY
+
+WBAN (ID): 13810
+
+Start Date: Jan 01, 1988
+
+End Date: December 31, 2017
+
+## Visualizing Temperatures
+
+```{r}
+dygraph(clean.df.ts$TEMP, 
+        main="Louisville Airport Tempuratures.",
+        ylab = "Temp (F)") %>% 
+  dyRangeSelector(dateWindow = c("2012-01-01","2017-12-31"))
+```
+
