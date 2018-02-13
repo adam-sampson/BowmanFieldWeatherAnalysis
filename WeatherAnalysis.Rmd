@@ -12,9 +12,10 @@ output:
 There is a lot of news about climate change and strange temperatures this year. In some areas with have the "bomb cyclone", and in other we have drought conditions. Living in Louisville I decided to take some time to see what the local data actually shows about trends in weather. 
 
 For this analysis I will be using a few packages which you will need loaded in order to follow along:
+
 ```{r echo=TRUE, results='hide', message=FALSE, error=FALSE}
 # List of packages to load:
-packages <- c("tidyverse", "lubridate", "xts", "zoo", "stringr", "dygraphs", "forecast", "xts")
+packages <- c("tidyverse", "lubridate", "tibbletime", "rlang", "dygraphs", "forecast", "zoo")
   
 # Check to see whether any packages aren't installed on the computer and install
 new_packages <- packages[!(packages %in% installed.packages()[,"Package"])]
@@ -45,46 +46,65 @@ The National Climate Data Center (NCDC) and National Centers for Environmental I
 
 I put in the following requests on the site: 
 
+For Lexington Data
 * US, Kentucky, Bluegrass Airport, 1973_01_01_00 to 2008_01_01_23.
 
-After a few minutes the website processed the website will process the file. Download the file to the working directory and then import the data to R.
+For Bowman Field Data there is some special work required because the name of the field changed in the  middle of the data set from 2000 to 2003.
+* US, Kentucky, Bowman Fld, 2000_01_01_00 to 2003_12_31_23.
+* US, Kentucky, Bowman Filed Airport, 1973_01_01_00 to 2008_01_01_23.
+
+After a few minutes the website processed process the file and send an email. Download the file to the working directory and then import the data to R.
 
 
 ```{r echo=TRUE, results='hide', message=FALSE, error=FALSE}
-# Let's use Lexington data because it is continuous since 1973
-file <- c("5157227547406dat.txt")
-df <- read.delim(file,header=TRUE, sep = "", as.is = TRUE, fill = TRUE)
-  
+# Load Lexington Data
+lexington.file <- c("5157227547406dat.txt")
+lex.df <- read.delim(lexington.file,header=TRUE, sep = "", as.is = TRUE, fill = TRUE)
+rm(lexington.file)
+
 # Make the YR..MODAHRMN easier to read
-colnames(df)[3] <- "DATE_TIME"
+colnames(lex.df)[3] <- "DATE_TIME"
+
+# Load Bowman Field Data
+bf.file1 <- c("1973_01_01-2018_01_01-BowmanField.txt")
+bf.file2 <- c("2000_01_01-2003_12_31-BowmanField.txt")
+bf.df1 <- read.delim(bf.file1,header=TRUE, sep = "", as.is = TRUE, fill = TRUE)
+bf.df2 <- read.delim(bf.file2,header=TRUE, sep = "", as.is = TRUE, fill = TRUE)
+bf.df <- full_join(bf.df1,bf.df2)
+rm(bf.file1,bf.file2,bf.df1,bf.df2)
+
+# Make the YR..MODAHRMN easier to read
+colnames(bf.df)[3] <- "DATE_TIME"
+
+# Arrange Bowman Field Data by date because we are merging two sets of date data
+# and need the dates to be in ascending order
+bf.df <- bf.df %>% arrange(DATE_TIME)
 ```
 
-### Fix missing values and values with non-numeric meanings
+### Clean up values that have special meaning
+
+Some of the values are non-numeric and have special meaning. 
+
+In the cloud ceiling column the value 722 means unlimted (aka no cloud ceiling).
+
+In all columns a * represents an NA value.
 
 ```{r}
-clean.df <- df
+clean_ncdc_df <- function(in.df) {
+  in.df[in.df[,"CLG"]=="722","CLG"] <- Inf
 
-# If CLG value is 722 it means Infinite according to documentation
-clean.df[clean.df[,"CLG"]=="722","CLG"] <- Inf
-
-# Replace missing values marked by * with NA
-for(col in names(clean.df)) {
-    clean.df[,col] <- str_replace_all(clean.df[,col],"^[*]+$","NA")
-    clean.df[clean.df[,col]=="NA",col] <- NA
+  # Replace missing values marked by * with NA
+  for(col in names(in.df)) {
+    in.df[,col] <- str_replace_all(in.df[,col],"^[*]+$","NA")
+    in.df[in.df[,col]=="NA",col] <- NA
   }
-  rm(col)
-  
-#---
-# Generate stats about variables
-#---
-  clean.df.stats <- list()
+  return(in.df)
+}
 
-  ## Determine what percent of a variable is NA
-  clean.df.stats[["na_percent"]] <- list()
-  for(col in names(clean.df)) {
-    clean.df.stats[["na_percent"]][col] <- 100*sum(is.na(clean.df[,col]))/length(clean.df[,col])
-  }
-  # clean.df.stats$na_percent
+bf.df <- clean_ncdc_df(bf.df)
+lex.df <- clean_ncdc_df(lex.df)
+
+rm(clean_ncdc_df)
 ```
 
 ### Fix variable types in the data
@@ -98,205 +118,219 @@ Second, the numeric items should be in numeric format
 * Note: Any fields with a character will be coerced to NA. In this case it is a good thing because a character in a numeric field indicates there was some anomaly with the data.
 
 ```{r echo=TRUE, results='hide', message=FALSE, error=FALSE}
-# DATE_TIME should be in a date format of ymd_hm
-clean.df$DATE_TIME <- ymd_hm(clean.df$DATE_TIME)
+bf.df$DATE_TIME <- ymd_hm(bf.df$DATE_TIME)
+lex.df$DATE_TIME <- ymd_hm(lex.df$DATE_TIME)
   
 # The following fields are numberic data (or close enough)
 numeric.var <- c("USAF", "WBAN","DIR","SPD","GUS","CLG","VSB","TEMP","DEWP","ALT","PCP01","SD")
 for(col in numeric.var) {
-  clean.df[col] <- as.numeric(unlist(clean.df[col]))
+  bf.df[col] <- as.numeric(unlist(bf.df[col]))
+}
+for(col in numeric.var) {
+  lex.df[col] <- as.numeric(unlist(lex.df[col]))
 }
 rm(numeric.var)
 ```
 
 ### Only keep the columns needed for the analysis
 
-For this analysis we will only be using numeric data. Coincidentally, this helps with the zoo package. Zoo uses a matrix format and all columns must be the same data type. By only keeping numeric columns we can leave all the data in numeric format. This means we won't have to use as.numeric() every time we use the data in a function. However, you may want to go ahead and use this in order to keep your code robust.
+For this analysis we will only be using numeric data. We will keep:
+
+* Date/Time (the time index...)
+* Temperature
+* Dewpoint
+* Wind Direction
+* Wind Speed
+* Gust Speed
+* Cloud Ceiling
+* Visibility
+* Precipitation in Previous Hour
 
 ```{r}
-colsToKeep <- c("USAF","WBAN","DATE_TIME","TEMP","DEWP","DIR","SPD","GUS","CLG","VSB","PCP01","SD")
-clean.df <- clean.df[,colsToKeep]
+colsToKeep <- c("DATE_TIME","TEMP","DEWP","DIR","SPD","GUS","CLG","VSB","PCP01")
+bf.df <- bf.df %>% select(colsToKeep)
+lex.df <- lex.df %>% select(colsToKeep)
 rm(colsToKeep)  
-rm(df)
 ```
 
-### Create a time series object using the zoo package
+### Make this into a tibbletime object for analysis
 
-It is easy to create a zoo object for time series analysis. 
+Converting into a tibbletime object is apparently the new way to use time series in R as of early 2018. 
 
 ```{r}
-df.zoo <- zoo(clean.df[,-3], order.by = clean.df[,3])
+bf.tt <- as_tbl_time(bf.df,index = DATE_TIME)
+lex.tt <- as_tbl_time(lex.df, index = DATE_TIME)
 ```
 
-Now let's plot the data to see that we have all the data in the set and that it is working.
+Now let's plot some of the data to make sure this is working. Let's start with temperature because it is realatively clean data.
 
 ```{r}
-plot(df.zoo$TEMP)
-```
-
-## Begin the time-series analysis on TEMP
-
-Now that the data has been imported, it is time to decompose the elements of the weather data into seasonal, trend, and random. 
-
-Based on the graph above it appears likely that an additive decomposition will be sufficient as the variation does not appear to be increasing over time.
-
-### Detect the trend
-
-For this data we expect to see a yearly seasonality becauase weather data is literally seasonal. 
-
-To calculate approximately yearly data (barring na values) it is possible to multiple 24 hours per day times 365.25 days per year
-
-```{r}
-# Bring the data into a zoo object with frequency = yearly
-df.zoo <- zoo(clean.df[,-3], order.by = clean.df[,3], frequency = 24*365.25)
-temp <- df.zoo$TEMP
-
-# Rolling average may have issues with NA...so let's deal with missing values.
-# temp <- na.approx(temp)
-temp <- na.omit(temp)
-
-temp.trend <- rollmean(x = temp, k=24*365.25)
-
-plot(df.zoo$TEMP)  
-  lines(temp.trend, col = "red")
-
-# Let's see if we get the same thing by using the decompose function
-temp.ts <- ts(temp, frequency = 24*365.25, start = c(1973, 1))
-
-df.decomp <- decompose(temp.ts, type = "multiplicative")
-plot(df.decomp$x, ann = FALSE)
-lines(df.decomp$trend, col = "red")
-title(main = "TEMP over time with trend in red",
-      ylab = "TEMP",
-      xlab = "Year")
-
-# plot(df.decomp$seasonal)
-# plot(df.decomp$random)
-# plot(df.decomp$figure)
-
-```
-
-# Strange seasonality still left in trend
-
-Apparently there are different quantities of data in the years 1997 to 2018? Let's find out.
-
-```{r}
-paste("1975 data points: ", length(df.zoo[year(index(df.zoo)) == 1975]))
-paste("2017 data points: ", length(df.zoo[year(index(df.zoo)) == 2017]))
-```
-
-There's the problem. Recent years have more data points for some reason...So the calculation of year is not 24*365.25 for every year...
-
-```{r}
-103444 / (24*365.25)
-145233 / (24*365.25)
-```
-
-Now it is necessary to find out why...
-
-```{r}
-head(df.zoo[year(index(df.zoo)) == 1973], n=20)
-head(df.zoo[year(index(df.zoo)) == 2017], n=20)
-```
-
-Egad! Data for recent years is not periodic! We need to aggregate our data into hourly.
-
-## Aggregating data into hourly data
-
-In order to do simple trend analysis it is necessary to have roughly the same number of points of data per year. Otherwise we will need more complex methods. Let's aggregate.
-
-```{r}
-temp.hourly <- period.apply(df.zoo$TEMP,
-                             endpoints(df.zoo$TEMP, 'hours'),
-                             mean)
-# Round down to get hours from 0 to 23 and drop minutes
-index(temp.hourly) <- trunc(index(temp.hourly), units = 'hours')
-
-head(temp.hourly[year(index(temp.hourly)) == 1973], n=20)
-head(temp.hourly[year(index(temp.hourly)) == 2017], n=20)
-```
-
-## Try to find trend again...
-
-Now that we have hourly data, let's try the trend code again.
-
-```{r}
-temp.trend <- rollmean(x = na.approx(temp.hourly), k=24*365.25)
-# plot(temp.trend)
-
-plot(temp.hourly)  
-  lines(temp.trend, col = "red")
-```
-
-## Fill in missing dates to prevent odd trend from missing data
-
-It is possible that missing elements are also causing problems because we are defining an environmental year as 24 hours times 365.25 days but some hours are missing.
-
-```{r}
-hours <- seq(start(temp.hourly),end(temp.hourly),by="hour")
-hours <- as.POSIXlt(hours)
-temp.full.hourly <- merge(temp.hourly,zoo(,hours),all = TRUE)
-# For some reason some extra hours were added before the data...
-  temp.full.hourly <- temp.full.hourly[6:length(temp.full.hourly),]
-```
-
-Now the times have been created, but they are NA. Need to fill them in.
-
-```{r}
-temp.full.hourly <- na.approx(temp.full.hourly)
-```
-
-Now, let's try plotting again...
-
-```{r}
-temp.full.trend <- rollmean(x = temp.full.hourly, k=24*365.25)
-# plot(temp.trend)
-
 par(mfrow=c(2,1))
-plot(temp.full.hourly)  
-  lines(temp.full.trend, col = "red")
-plot(temp.full.trend, col = "red")
+plot(x = bf.tt$DATE_TIME, y = bf.tt$TEMP, type = "n", main = "Bowman Field") +
+  lines(x = bf.tt$DATE_TIME, y = bf.tt$TEMP)
+plot(x = lex.tt$DATE_TIME, y = lex.tt$TEMP, type = "n", main = "Lexington") +
+  lines(x = lex.tt$DATE_TIME, y = lex.tt$TEMP)
 ```
 
-## Now let's decompose the cleaner data
+Huzzah! We have two sets of data from 1973 through 2017!
 
+## Prepare data for Time Series Analysis
+
+### Make the data set regular
+
+Many time series functions use integer inputs to determine the length of a period. For example: one year is 365 daily values, one year is 24*365.25 hourly values, etc. Because these functions use an integer number of values as a period, any missing or extra values will cause problems. For instance, what happens if one year has exactly 385 daily values, but another year has 300 daily values? If we perform a moving average with a window of a 365 days there will be problems in the  moving average. 
+
+#### Check for regular data
+
+Let's first see if there are any missing hours in a year.
+
+```{r}
+bf.tt %>% 
+  collapse_by('yearly') %>%
+  group_by(DATE_TIME) %>%
+  select(DATE_TIME,TEMP) %>%
+  summarise(length = length(TEMP))
+```
+
+Notice that each year has a different length. This data is definitely not regular. There is a difference in length of almost 1,000 hours here.
+
+Now let's see if there are any hours with multiple readings.
+
+```{r}
+bf.tt %>% 
+  collapse_by('hourly') %>%
+  group_by(DATE_TIME) %>%
+  select(DATE_TIME,TEMP) %>%
+  summarise(count = n()) %>%
+  collapse_by('yearly') %>%
+  group_by(DATE_TIME) %>%
+  summarise(min_val_per_hour = min(count),max_val_per_hour = max(count))
+```
+
+Again our data isn't regular! Some hours have 1 value associated with them, and some have up to 5 values associated with them!
+
+#### Fix irregular data
+
+The weather data has BOTH missing hourly values AND extra hourly values.
+
+Now, let's fill in any missing rows so that our period of one [solar] year is correct. 
+
+```{r}
+## Note: this is old code. 
+# Need to update and use tibbletime::create_series(start ~ end, '1 hour')
+tt_add_missing_rows <- function(in.tbl_time, by = 'hour') {
+  # Programatically find the index column
+  index_column <- attributes(in.tbl_time)$index_quo[[2]]
+  
+  # Programatically find the first and last date/time in the index
+  start.idx <- start(in.tbl_time[,paste0(index_column)][[1]])
+  end.idx <- end(in.tbl_time[,paste0(index_column)][[1]])
+  
+  start <- in.tbl_time[start.idx,paste0(index_column)][[1]][[1]]
+  end <- in.tbl_time[end.idx,paste0(index_column)][[1]][[1]]
+  
+  seq.vec <- seq(start,end,by=by)
+  seq.df <- data.frame(seq.vec)
+    # Make the date/time column the same as for the other vector 
+    # so that merge by will auto detect.
+    names(seq.df)[1] <- paste(index_column)
+  
+  out.tbl_time <- merge(in.tbl_time,seq.df,all = TRUE)
+  out.tbl_time <- as_tbl_time(out.tbl_time, index = DATE_TIME)
+}
+
+bf.tt <- tt_add_missing_rows(bf.tt, by = 'hour')
+lex.tt <- tt_add_missing_rows(lex.tt, by = 'hour')
+```
+
+With all the rows there, let's remove extra hourly values by aggregating the hour using a mean of all values for that hour. (Note: There are half a million observations here...this takes a minute to aggregate...)
+
+```{r}
+tt_period_apply <- function(in.tbl_time, in.period, in.func = mean, na_rm = TRUE) {
+  # Programatically find the index column
+  index_column <- attributes(in.tbl_time)$index_quo[[2]]
+  # Collapse by period, group by index, then summarise by function.
+  out.tbl_time <- in.tbl_time %>%
+    collapse_by(in.period) %>%
+    group_by(!!! sym(index_column)) %>%
+    summarise_if(is.numeric, in.func, na.rm = na_rm)
+}
+
+bf.tt <- tt_period_apply(bf.tt, 'hourly', mean, na_rm = TRUE)
+lex.tt <- tt_period_apply(lex.tt, 'hourly', mean, na_rm = TRUE)
+```
+
+
+#### Check again for regular data
+
+Let's validate that we now have regular data (full of NA's).
+
+```{r}
+bf.tt %>% 
+  collapse_by('yearly') %>%
+  group_by(DATE_TIME) %>%
+  select(DATE_TIME,TEMP) %>%
+  summarise(length = length(TEMP))
+```
+
+There is some minor variation...but that is due to leap years and the fact that this is showing us a calendar year instead of a solar year.
+
+```{r}
+bf.tt %>% 
+  collapse_by('hourly') %>%
+  group_by(DATE_TIME) %>%
+  select(DATE_TIME,TEMP) %>%
+  summarise(count = n()) %>%
+  collapse_by('yearly') %>%
+  group_by(DATE_TIME) %>%
+  summarise(min_val_per_hour = min(count),max_val_per_hour = max(count))
+```
+
+Now we have regularly spaced hourly data! Ready to move on to perform analysis.
+
+### Determine what to do about NA values.
+
+For most of the time series analysis the program needs to know how to handle NA values. Not an easy thing to do in some cases.
+
+#### NA values in TEMP
+
+It is pretty easy to handle NA values in TEMP. Most of the missing data is just an hour or two in a row. And temperature data is autocorrelated heavily with the last reading. So we can fill with extrapoloated values. 
+
+```{r}
+bf.approx.tt <- bf.tt
+bf.approx.tt$TEMP <- trunc(zoo::na.approx(bf.tt$TEMP))
+```
+
+
+## Perform Time Series Analysis
+
+### First Decomposition of Temperature
+
+Since temperature is fairly clean data and easy to use a decomposition is done below. 
 ```{r fig.height = 7, fig.width = 8}
-temp.full.ts <- ts(temp.full.hourly, frequency = 24*365.25, start = c(1973, 1))
+start <- bf.approx.tt[start(bf.approx.tt[,1][[1]])[1],1][[1]]
+bf.temp.ts <- ts(bf.approx.tt$TEMP, frequency = 24*365.25, start = start)
 
-temp.full.decomp <- decompose(temp.full.ts, type = "multiplicative")
+acf(bf.temp.ts)
+
+temp.decomp <- decompose(bf.temp.ts, type = "multiplicative")
 par(mfrow=c(4,1))
-plot(temp.full.decomp$trend)
-plot(temp.full.decomp$seasonal)
-plot(temp.full.decomp$random)
-plot(temp.full.decomp$figure)
+plot(temp.decomp$trend)
+plot(temp.decomp$seasonal)
+plot(temp.decomp$random)
+plot(temp.decomp$figure)
+
+bf.temp.stl <- stl(bf.temp.ts, s.window="per", robust=TRUE)
+plot(bf.temp.stl)
+fcast <- forecast(bf.temp.stl, method = "naive")
+plot(fcast)
 ```
 
-The random plot clearly is not random...but what could it be? Let's try night/day variation. One hypothesis is that there is more variation between high/low temperature during the winter than there is during the summer. Let's put it to the test.
+#### Reviewing Temperature Decomposition Results
 
-## Decomposing night/day variation
+This decomposition did not full account for the variation over time. The mean is well handled, but the random plot shows that the error terms are also seasonal.
 
-Let's first try to decompose the night/day (aka 24 hour trend) using the full data set.
+Looking more closely at the data, there is variation each day from the low temperature to the high temperature. We can either deal with this by some fancy modelling...or we can break our temperature into daily low/mean/high values which will be easier to deal with.
 
-```{r fig.height = 7, fig.width = 8}
-temp.full.ts <- ts(temp.full.hourly, frequency = 24, start = c(1973, 1))
+#### Concerting TEMP into new variables
 
-temp.full.decomp <- decompose(temp.full.ts, type = "multiplicative")
-par(mfrow=c(4,1))
-plot(temp.full.decomp$trend)
-plot(temp.full.decomp$seasonal)
-plot(temp.full.decomp$random)
-plot(temp.full.decomp$figure)
-```
-
-Now, let's use the trend left over from the daily to decompose for the yearly.
-
-```{r fig.height = 7, fig.width = 8}
-temp.full.ts <- ts(temp.full.decomp$trend, frequency = 24*365.25)
-
-temp.full.decomp <- decompose(temp.full.ts, type = "multiplicative")
-par(mfrow=c(4,1))
-plot(temp.full.decomp$trend)
-plot(temp.full.decomp$seasonal)
-plot(temp.full.decomp$random)
-plot(temp.full.decomp$figure)
-```
