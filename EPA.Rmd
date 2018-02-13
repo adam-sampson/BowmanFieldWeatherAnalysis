@@ -17,7 +17,7 @@ knitr::opts_chunk$set(echo = TRUE)
 
 ```{r message=FALSE, warning=FALSE, results='hide'}
 #   Check that necessary packages are installed
-    packages <- c("tidyverse", "lubridate", "xts")
+    packages <- c("tidyverse", "lubridate", "xts", "corrplot")
     new_packages <- packages[!(packages %in% installed.packages()[,"Package"])]
     if(length(new_packages)) install.packages(new_packages)
 
@@ -67,6 +67,10 @@ Data was aquired from the EPA website there are several monitoring stations in J
 ```{r eval=FALSE, message=FALSE, warning=FALSE, include=TRUE, paged.print=FALSE}
     summary(EPA_data)
     corrplot(cor(EPA_data),method="number")
+
+    
+    
+#  create time series
     EPA_ts <- EPA_data %>% select(Date, Measurement, DAILY_AQI_VALUE, DAILY_OBS_COUNT, AQS_PARAMETER_CODE )
 
     EPA_ts <- ts(EPA_ts, start = c(1990, 1), end = c(2017,12),  frequency = 365)
@@ -75,3 +79,29 @@ Data was aquired from the EPA website there are several monitoring stations in J
 
 ```
 
+
+
+```{r echo=TRUE}
+
+    pm_1 <- EPA_data[EPA_data$AQS_PARAMETER_DESC =="PM2.5 - Local Conditions" 
+                     & EPA_data$Date >= "2017-01-01" & EPA_data$Date < "2017-12-31", ]
+    pm_2 <- EPA_data[EPA_data$AQS_PARAMETER_DESC =="PM2.5 - Local Conditions" 
+                     & EPA_data$Date >= "2016-01-01" & EPA_data$Date < "2016-12-31", ]
+   
+    summary(factor(pm_1$AQS_SITE_ID))
+    rng <- range(pm_1$Measurement, pm_2$Measurement, na.rm = T)
+    par(mfrow = c(1, 2))
+    plot(pm_1$Date,pm_1$Measurement , pch = 20, ylim = rng, xlab = "", 
+         ylab = expression(PM[2.5] * " (" * mu * g/m^3 * ")"), col = pm_1$AQS_SITE_ID)
+    abline(h = median(pm_1$Measurement, na.rm = T), col = "red")
+    plot(pm_2$Date,pm_2$Measurement , pch = 20, ylim = rng, xlab = "", 
+         ylab = expression(PM[2.5] * " (" * mu * g/m^3 * ")"), col = pm_2$AQS_SITE_ID)
+    abline(h = median(pm_2$Measurement, na.rm = T), col = "red")
+```
+
+### Seasonal Variation
+
+
+
+
+### Correlations with other pollutants
