@@ -25,31 +25,53 @@ knitr::opts_chunk$set(echo = TRUE)
     sapply(packages, require, character.only = TRUE)
 ```
 
+###  Introduction
+What is Air Pollutions, what causes it?
+
+Particulate matter
+Fine particulate matter is a broad term used for an airborne mixture of solid particles and liquid droplets. These particles are <= 2.5 microns in diameter and, although the composition is region-specific, are largely made up of sulphate, nitrate, carbon particles and soil. Fine particles are produced from all types of combustion, including motor vehicles, power plants, residential wood burning, forest fires, agricultural burning, and some industrial processes.
+ 
+ 
+Along with ground-level ozone, fine particulate matter is one of the two major components of smog.
+ 
+From a human perspective, excess fine particulates pose hazards for people with asthma, cardiovascular or lung disease, as well as children and the elderly. These health effects have been associated with both short term (daily) and long term (>year) exposure. However, even if you are healthy, you may feel temporary symptoms if you are exposed to high levels of particle pollution. Numerous scientific studies connect particle pollution exposure to a variety of health issues, including:
+
+•	irritation of the eyes, nose and throat
+•	coughing, chest tightness and shortness of breath
+•	reduced lung function
+•	irregular heartbeat
+•	asthma attacks
+•	heart attacks
+•	premature death in people with heart or lung disease
+
+Ecologically, fine particulate matter can damage vegetation and can lead to soil erosion.
+
+The EPA has set National Ambient Air Quality Standards for six principal pollutants found [here](https://www.epa.gov/criteria-air-pollutants/naaqs-table).
 
 
 ###  Collect Data
 Data was aquired from the EPA website there are several monitoring stations in Jefferson County.
-```{r message=FALSE, warning=FALSE, paged.print=FALSE}
+```{r eval=FALSE, message=FALSE, warning=FALSE, include=TRUE, paged.print=FALSE}
 #   Gather all the files in the directory
     temp <- list.files(pattern="*.csv")
-    
-#   Read in all the files and bind them together    
-    EPA_data <- lapply(temp, function(x) read.csv(x, stringsAsFactors = FALSE)) %>% bind_rows()
-    
-    save(EPA_data, file = "EPA.Rdata")
+
+#  Read in all the files and bind them together
+   EPA_data <- lapply(temp, function(x) read.csv(x, stringsAsFactors = FALSE)) %>% bind_rows()
+   
+   save(EPA_data, file = "EPA.Rdata")
 
 ```
 
 ###  Exploratory Analysis
 
-```{r}
-  summary(EPA_data)
+```{r eval=FALSE, message=FALSE, warning=FALSE, include=TRUE, paged.print=FALSE}
+    summary(EPA_data)
+    corrplot(cor(EPA_data),method="number")
+    EPA_ts <- EPA_data %>% select(Date, Measurement, DAILY_AQI_VALUE, DAILY_OBS_COUNT, AQS_PARAMETER_CODE )
 
-EPA_ts <- EPA_data %>% select(Date, Measurement, DAILY_AQI_VALUE, DAILY_OBS_COUNT, AQS_PARAMETER_CODE )
+    EPA_ts <- ts(EPA_ts, start = c(1990, 1), end = c(2017,12),  frequency = 365)
 
-EPA_ts <- ts(EPA_ts, start = c(1990, 1), end = c(2017,12),  frequency = 365)
-
-plot(EPA_ts)
+    plot(EPA_ts)
 
 ```
 
