@@ -17,7 +17,7 @@ knitr::opts_chunk$set(echo = TRUE)
 
 ```{r eval=TRUE, message=FALSE, warning=FALSE, include=TRUE, results='hide'}
 #   Check that necessary packages are installed
-    packages <- c("tidyverse", "lubridate", "xts", "corrplot", "readxl")
+    packages <- c("tidyverse", "lubridate", "xts", "corrplot", "readxl", "knitr", "forecast", "tseries")
     new_packages <- packages[!(packages %in% installed.packages()[,"Package"])]
     if(length(new_packages)) install.packages(new_packages)
 
@@ -135,9 +135,42 @@ Data was aquired from the EPA website there are several monitoring stations in J
     abline(h = 50, col = "red")
 ```
 
+
+```{r table-simple, echo=FALSE, message=FALSE, warnings=FALSE, results='asis'}
+
+my.data <- " Air Quality Index | Levels of Health Concern | Meaning
+0 to 50	|Good   | Air quality is considered satisfactory, and air pollution poses little or no risk.
+51 to 100 |Moderate| Air quality is acceptable; however, for some pollutants there may be a moderate health concern for a very small number of people who are unusually sensitive to air pollution.
+101 to 150	|Unhealthy for Sensitive Groups| Members of sensitive groups may experience health effects. The general public is not likely to be affected.	
+151 to 200	|Unhealthy| Everyone may begin to experience health effects; members of sensitive groups may experience more serious health effects.
+201 to 300	|Very Unhealthy| Health alert: everyone may experience more serious health effects.
+301 to 500	|Hazardous| Health warnings of emergency conditions. The entire population is more likely to be affected."
+
+df <- read.delim(textConnection(my.data),header=FALSE,sep="|",strip.white=TRUE,stringsAsFactors=FALSE)
+names(df) <- unname(as.list(df[1,])) # put headers on
+df <- df[-1,] # remove first row
+row.names(df)<-NULL
+
+
+ kbl <- kable(df, "html")
+   # kable(df)
+   kableExtra::kable_styling(kbl, "striped", position = "left", font_size = 10, full_width = F)
+	
+```
+
 ### Seasonal Variation
-
-
+```{r}
+    pm2.5_ts <- ts(pm2.5$avg.measurement, start = c(2000, 1), end = c(2017,09),  frequency = 12)
+    plot(pm2.5_ts)
+    seasonplot(pm2.5_ts, s = 12,   main="Seasonal plot: PM 2.5",
+                year.labels=TRUE, year.labels.left=TRUE, col=1:20, pch=1)
+    decomp_pm <- decompose(pm2.5_ts, type = "multiplicative" )
+    acf(pm2.5_ts)
+    acf(diff(pm2.5_ts, lag = 5))
+    adf.test(pm2.5_ts, alternative = "stationary")
+    plot(decomp_pm)
+```
 
 
 ### Correlations with other pollutants
+In order to examine the cause of pollution we will need to look at correlation between the PM2.5 and other weather variables such as temperature, wind, and precipitation.  
