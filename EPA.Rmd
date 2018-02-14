@@ -83,29 +83,56 @@ Data was aquired from the EPA website there are several monitoring stations in J
 
 ```{r echo=TRUE}
     
-    load("EPA.Rdata")
+    load("EPA_data.Rdata")
+    #EPA_data <- read_excel("EPA_data.xlsx")
 
-    pm_1 <- EPA_data[EPA_data$AQS_PARAMETER_DESC =="PM2.5 - Local Conditions" 
-                     & EPA_data$Date >= "2017-01-01" & EPA_data$Date < "2017-12-31", ]
-    pm_2 <- EPA_data[EPA_data$AQS_PARAMETER_DESC =="PM2.5 - Local Conditions" 
-                     & EPA_data$Date >= "2016-01-01" & EPA_data$Date < "2016-12-31", ]
+#   Choose two years to compare. Also, this will average the measurements accross all sites.
+
+    ozone <- EPA_data[EPA_data$AQS_PARAMETER_DESC =="Ozone", ] %>% 
+            group_by(Date) %>% 
+            summarise(avg.measurement = mean( Measurement ))
+    
+    so2 <- EPA_data[EPA_data$AQS_PARAMETER_DESC =="Sulfur dioxide", ] %>% 
+            group_by(Date) %>% 
+            summarise(avg.measurement = mean( Measurement ))
+    
+    pm2.5 <- EPA_data[EPA_data$AQS_PARAMETER_DESC =="PM2.5 - Local Conditions", ]%>% 
+            group_by(Date) %>% 
+            summarise(avg.measurement = mean( Measurement ))
+    
+    AQI <- EPA_data %>% select(Date, DAILY_AQI_VALUE) %>% 
+            group_by(Date) %>% 
+            summarise(avg.measurement = mean( DAILY_AQI_VALUE ))
    
-    summary(factor(pm_1$AQS_SITE_ID))
-    rng <- range(pm_1$Measurement, pm_2$Measurement, na.rm = T)
-    rng_x <-range(pm_1$Date, na.rm = TRUE)
-    rng_x2 <-range(pm_2$Date, na.rm = TRUE)
+    
+  
 
-    par(mfrow = c(1, 2))
-    plot(pm_1$Date, pm_1$Measurement , pch = 20, xlim = rng_x, ylim = rng, xlab = "", 
-         ylab = expression(PM[2.5] * " (" * mu * g/m^3 * ")"), col = pm_1$AQS_SITE_ID)
-    title("2017 PM2.5")
-    abline(h = median(pm_1$Measurement, na.rm = T), col = "blue")
-    abline(h = 12.0, col = "red")
-    plot(pm_2$Date,pm_2$Measurement , pch = 20, xlim = rng_x2, ylim = rng, xlab = "", 
-         ylab = expression(PM[2.5] * " (" * mu * g/m^3 * ")"), col = pm_2$AQS_SITE_ID)
-    title("2016 PM2.5")
-    abline(h = median(pm_2$Measurement, na.rm = T), col = "blue")
-    abline(h = 12.0, col = "red")
+    #par(mfrow = c(4, 1))
+    plot(ozone$Date , ozone$avg.measurement , pch = 20, xlim = range(ozone$Date, na.rm = TRUE), 
+         ylim = range(ozone$avg.measurement, na.rm = T), xlab = "", ylab = "ppm")
+    title("Ozone 1990 - 2017")
+    abline(h = median(ozone$avg.measurement, na.rm = T), col = "blue")
+    abline(h = 0.070, col = "red")
+    
+    plot(so2$Date , so2$avg.measurement , pch = 20, xlim = range(so2$Date, na.rm = TRUE), 
+         ylim = range(so2$avg.measurement, na.rm = T), xlab = "", ylab = "ppm")
+    title("Sulfur Dioxide 1990 - 2017")
+    abline(h = median(so2$avg.measurement, na.rm = T), col = "blue")
+    abline(h = 75, col = "red")
+    
+    plot(pm2.5$Date,pm2.5$avg.measurement , pch = 20, xlim = range(pm2.5$Date, na.rm = TRUE), 
+         ylim = range(pm2.5$avg.measurement, na.rm = T), xlab = "", 
+         ylab = expression(PM[2.5] * " (" * mu * g/m^3 * ")"))
+    title("PM2.5 2000 - 2017")
+    abline(h = median(pm2.5$avg.measurement, na.rm = T), col = "blue")
+    abline(h = 12.0, col = "red") # Treshold
+    
+     plot(AQI$Date,AQI$avg.measurement , pch = 20, xlim = range(AQI$Date, na.rm = TRUE), 
+         ylim = range(AQI$avg.measurement, na.rm = T), xlab = "", 
+         ylab = "Air Quality Index 1990 - 2017")
+    title("Air Quality Index")
+    abline(h = median(AQI$avg.measurement, na.rm = T), col = "blue")
+    abline(h = 50, col = "red")
 ```
 
 ### Seasonal Variation
