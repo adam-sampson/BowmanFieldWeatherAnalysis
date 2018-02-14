@@ -15,9 +15,9 @@ knitr::opts_chunk$set(echo = TRUE)
 
 ###  Load Required Packages and Files  
 
-```{r message=FALSE, warning=FALSE, results='hide'}
+```{r eval=TRUE, message=FALSE, warning=FALSE, include=TRUE, results='hide'}
 #   Check that necessary packages are installed
-    packages <- c("tidyverse", "lubridate", "xts", "corrplot")
+    packages <- c("tidyverse", "lubridate", "xts", "corrplot", "readxl")
     new_packages <- packages[!(packages %in% installed.packages()[,"Package"])]
     if(length(new_packages)) install.packages(new_packages)
 
@@ -35,14 +35,14 @@ Fine particulate matter is a broad term used for an airborne mixture of solid pa
 Along with ground-level ozone, fine particulate matter is one of the two major components of smog.
  
 From a human perspective, excess fine particulates pose hazards for people with asthma, cardiovascular or lung disease, as well as children and the elderly. These health effects have been associated with both short term (daily) and long term (>year) exposure. However, even if you are healthy, you may feel temporary symptoms if you are exposed to high levels of particle pollution. Numerous scientific studies connect particle pollution exposure to a variety of health issues, including:
-
-•	irritation of the eyes, nose and throat
-•	coughing, chest tightness and shortness of breath
-•	reduced lung function
-•	irregular heartbeat
-•	asthma attacks
-•	heart attacks
-•	premature death in people with heart or lung disease
+    
+*   irritation of the eyes, nose and throat
+*   coughing, chest tightness and shortness of breath
+*   reduced lung function
+*   irregular heartbeat
+*   asthma attacks
+*   heart attacks
+*   premature death in people with heart or lung disease
 
 Ecologically, fine particulate matter can damage vegetation and can lead to soil erosion.
 
@@ -82,6 +82,8 @@ Data was aquired from the EPA website there are several monitoring stations in J
 
 
 ```{r echo=TRUE}
+    
+    load("EPA.Rdata")
 
     pm_1 <- EPA_data[EPA_data$AQS_PARAMETER_DESC =="PM2.5 - Local Conditions" 
                      & EPA_data$Date >= "2017-01-01" & EPA_data$Date < "2017-12-31", ]
@@ -90,13 +92,20 @@ Data was aquired from the EPA website there are several monitoring stations in J
    
     summary(factor(pm_1$AQS_SITE_ID))
     rng <- range(pm_1$Measurement, pm_2$Measurement, na.rm = T)
+    rng_x <-range(pm_1$Date, na.rm = TRUE)
+    rng_x2 <-range(pm_2$Date, na.rm = TRUE)
+
     par(mfrow = c(1, 2))
-    plot(pm_1$Date,pm_1$Measurement , pch = 20, ylim = rng, xlab = "", 
+    plot(pm_1$Date, pm_1$Measurement , pch = 20, xlim = rng_x, ylim = rng, xlab = "", 
          ylab = expression(PM[2.5] * " (" * mu * g/m^3 * ")"), col = pm_1$AQS_SITE_ID)
-    abline(h = median(pm_1$Measurement, na.rm = T), col = "red")
-    plot(pm_2$Date,pm_2$Measurement , pch = 20, ylim = rng, xlab = "", 
+    title("2017 PM2.5")
+    abline(h = median(pm_1$Measurement, na.rm = T), col = "blue")
+    abline(h = 12.0, col = "red")
+    plot(pm_2$Date,pm_2$Measurement , pch = 20, xlim = rng_x2, ylim = rng, xlab = "", 
          ylab = expression(PM[2.5] * " (" * mu * g/m^3 * ")"), col = pm_2$AQS_SITE_ID)
-    abline(h = median(pm_2$Measurement, na.rm = T), col = "red")
+    title("2016 PM2.5")
+    abline(h = median(pm_2$Measurement, na.rm = T), col = "blue")
+    abline(h = 12.0, col = "red")
 ```
 
 ### Seasonal Variation
