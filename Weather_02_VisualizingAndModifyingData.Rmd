@@ -1,0 +1,359 @@
+---
+title: "Bowman Field Weather_01_Visualizing and Re-encoding Data"
+output:
+  pdf_document:
+    toc: yes
+  html_notebook:
+    toc: yes
+  html_document:
+    df_print: paged
+    toc: yes
+---
+
+## Louisville Weather Time Series Analysis
+
+This is the seconds in a series of files regarding the analysis of Weather Data in Louisville.
+
+
+For this analysis I will be using a few packages which you will need loaded in order to follow along:
+
+```{r echo=TRUE, results='hide', message=FALSE, error=FALSE}
+# List of packages to load:
+packages <- c("tidyverse", "lubridate", "tibbletime", "rlang", "dygraphs", "forecast", "zoo", "xts", "stringr")
+  
+# Check to see whether any packages aren't installed on the computer and install
+new_packages <- packages[!(packages %in% installed.packages()[,"Package"])]
+if(length(new_packages)) install.packages(new_packages)
+  
+# Load Neccessary Packages
+sapply(packages, require, character.only = TRUE)
+rm(new_packages)
+```
+
+
+## Data Import
+
+Data was imported, cleaned, and regularized in Weather_01. In order to import the data now we just need to load the RData file.
+
+```{r}
+load(file = "BowmanField_Weather.RData")
+```
+
+
+## Visualize Data
+
+### Plot Data and discuss
+
+#### Temperature
+
+```{r}
+temp.xts <- xts(select(filter_time(bf.tt, '2012' ~ '2017'),TEMP),order.by = filter_time(bf.tt, '2012' ~ '2017')$DATE_TIME)
+
+temp.xts %>% dygraph(main="Bowman Field Temperature (F)") %>%
+  dyAxis('y', label = "Temperature (F)") %>%
+  dySeries("TEMP", axis = 'y') %>%
+  dyRangeSelector(dateWindow = c("2016-01-01","2017-12-31")) %>%
+  dyUnzoom()
+```
+
+A review of the graph shows a couple of things of interest. The first interesting thing is that there is a wide variation in daily temperatures, but it appears that there may be more variation between days during the winter than during the summer. It might be better to use daily Max/Min/Mean data for this analysis than to use hourly data.
+
+Actions to be taken:
+
+1. Aggregate to daily
+  i) Column for each of Max, Min, Mean
+
+#### Wind Direction
+
+```{r}
+dir.xts <- xts(select(filter_time(bf.tt, '2012' ~ '2017'),DIR),order.by = filter_time(bf.tt, '2012' ~ '2017')$DATE_TIME)
+
+dir.xts %>% dygraph(main="Bowman Field Wind Direction (Compass Degrees)") %>%
+  dyAxis('y', label = "Wind Direction (Compass Degrees)") %>%
+  dySeries("DIR", axis = 'y') %>%
+  dyRangeSelector(dateWindow = c("2016-01-01","2017-12-31")) %>%
+  dyUnzoom()
+```
+
+From the
+
+#### Wind Speed
+
+```{r}
+spd.xts <- xts(select(filter_time(bf.tt, '2012' ~ '2017'),SPD),order.by = filter_time(bf.tt, '2012' ~ '2017')$DATE_TIME)
+
+spd.xts %>% dygraph(main="Bowman Field Wind Speed (mph)") %>%
+  dyAxis('y', label = "Wind speed (mph)") %>%
+  dySeries("SPD", axis = 'y') %>%
+  dyRangeSelector(dateWindow = c("2016-01-01","2017-12-31")) %>%
+  dyUnzoom()
+```
+
+Wind speed appears to be seasonal, with maximum wind speed expected in the Spring. 
+
+Some actions to take:
+
+1) Convert data to daily
+  i) Column for Max, Min, and Mean wind speed per day
+
+#### Precipitation
+
+```{r}
+precip.xts <- xts(select(filter_time(bf.tt, '2012' ~ '2017'),PCP01),order.by = filter_time(bf.tt, '2012' ~ '2017')$DATE_TIME)
+
+precip.xts %>% dygraph(main="Bowman Field Precipitation (Inches)") %>%
+  dyAxis('y', label = "Precipitation (In)") %>%
+  dySeries("PCP01", axis = 'y') %>%
+  dyRangeSelector(dateWindow = c("2016-01-01","2017-12-31")) %>%
+  dyUnzoom()
+```
+
+There are a couple of interesting things to think about on this graph. First, there appears to be some sort of seasonality in the amplitude of the precipiation amounts. More rain per hour is expected during the summer when it rains. Second, this graph is only showing amplitude of the data, but is not clear how often it rains. Time since last rain may be as important to air quality as the amount of rain is. 
+
+Actions to take:
+
+1) Aggregate data to daily by taking Sum of rain in that day. 
+2) Create a new column for days since last rain (also daily). 
+
+## Aggregate data to daily
+
+Next step is to aggregate all of the data into daily values.
+
+Start with a function to make it clearer and easier.
+
+```{r echo=TRUE, results='hide', message=FALSE, error=FALSE}
+tt_period_apply <- function(in.tbl_time, in.period, in.func = mean, na_rm = TRUE) {
+  # Programatically find the index column
+  index_column <- attributes(in.tbl_time)$index_quo[[2]]
+  # Collapse by period, group by index, then summarise by function.
+  out.tbl_time <- in.tbl_time %>%
+    collapse_by(in.period) %>%
+    group_by(!!! sym(index_column)) %>%
+    summarise_if(is.numeric, in.func, na.rm = na_rm)
+}
+```
+
+### Aggregate Temperature
+
+```{r echo=TRUE, results='hide', message=FALSE, error=FALSE}
+temporary.tt <- bf.tt %>% select(DATE_TIME,TEMP)
+bf.daily.tt <- tt_period_apply(temporary.tt, 'daily', in.func = mean, na_rm = TRUE) %>%
+  select(DATE_TIME, mean.temp = TEMP)
+bf.daily.tt <- tt_period_apply(temporary.tt, 'daily', in.func = max, na_rm = TRUE) %>%
+  select(DATE_TIME, max.temp = TEMP) %>%
+  full_join(bf.daily.tt,by = 'DATE_TIME')
+bf.daily.tt <- tt_period_apply(temporary.tt, 'daily', in.func = min, na_rm = TRUE) %>%
+  select(DATE_TIME, min.temp = TEMP) %>%
+  full_join(bf.daily.tt,by = 'DATE_TIME')
+rm(temporary.tt)
+```
+
+### Convert Wind Direction to N/S and E/W values
+
+```{r echo=TRUE, results='hide', message=FALSE, error=FALSE}
+temporary.tt <- bf.tt %>% select(DATE_TIME, DIR)
+# Convert directions in degrees to Radians, then to x and y
+temporary.tt <- temporary.tt %>%
+  mutate(dir.x = round(sin(DIR*pi/180),digits = 6),
+         dir.y = round(cos(DIR*pi/180),digits = 6))
+
+```
+
+### Aggregate Wind Direction X and Y
+
+```{r echo=TRUE, results='hide', message=FALSE, error=FALSE}
+temporary.tt <- temporary.tt %>% select(DATE_TIME,dir.x, dir.y)
+bf.daily.tt <- tt_period_apply(temporary.tt, 'daily', in.func = mean, na_rm = TRUE) %>%
+  select(DATE_TIME, mean.dir.x = dir.x, mean.dir.y = dir.y) %>%
+  full_join(bf.daily.tt, by = 'DATE_TIME')
+bf.daily.tt <- tt_period_apply(temporary.tt, 'daily', in.func = min, na_rm = TRUE) %>%
+  select(DATE_TIME, min.dir.x = dir.x, min.dir.y = dir.y) %>%
+  full_join(bf.daily.tt, by = 'DATE_TIME')
+bf.daily.tt <- tt_period_apply(temporary.tt, 'daily', in.func = max, na_rm = TRUE) %>%
+  select(DATE_TIME, max.dir.x = dir.x, max.dir.y = dir.y) %>%
+  full_join(bf.daily.tt, by = 'DATE_TIME')
+rm(temporary.tt)
+```
+
+### Aggregate Wind Speed
+
+```{r echo=TRUE, results='hide', message=FALSE, error=FALSE}
+temporary.tt <- bf.tt %>% select(DATE_TIME,SPD)
+bf.daily.tt <- tt_period_apply(temporary.tt, 'daily', in.func = mean, na_rm = TRUE) %>%
+  select(DATE_TIME, mean.spd = SPD) %>%
+  full_join(bf.daily.tt,by = 'DATE_TIME')
+bf.daily.tt <- tt_period_apply(temporary.tt, 'daily', in.func = max, na_rm = TRUE) %>%
+  select(DATE_TIME, max.spd = SPD) %>%
+  full_join(bf.daily.tt,by = 'DATE_TIME')
+bf.daily.tt <- tt_period_apply(temporary.tt, 'daily', in.func = min, na_rm = TRUE) %>%
+  select(DATE_TIME, min.spd = SPD) %>%
+  full_join(bf.daily.tt,by = 'DATE_TIME')
+rm(temporary.tt)
+```
+
+### Aggregate Precipitation
+
+```{r echo=TRUE, results='hide', message=FALSE, error=FALSE}
+temporary.tt <- bf.tt %>% select(DATE_TIME, PCP01)
+bf.daily.tt <- tt_period_apply(temporary.tt, 'daily', in.func = sum, na_rm = TRUE) %>%
+  select(DATE_TIME, sum.precip = PCP01) %>%
+  full_join(bf.daily.tt,by = 'DATE_TIME')
+rm(temporary.tt)
+```
+
+
+### Add new column for days since last Precipitation
+
+```{r}
+bf.daily.tt <- bf.daily.tt %>% 
+  mutate(days.since.precip = NA)
+rain_data_detected <- FALSE
+for(row in 1:length(bf.daily.tt$days.since.precip)) {
+  if(rain_data_detected) {
+    bf.daily.tt$days.since.precip[row] <- ifelse(bf.daily.tt$sum.precip[row] <= 0.01, 
+                                        ifelse(is.na(bf.daily.tt$days.since.precip[row-1]),
+                                               1,
+                                               bf.daily.tt$days.since.precip[row-1] + 1), 
+                                        0)
+  } else {
+    if(bf.daily.tt$sum.precip[row] >= 0.01) {
+      rain_data_detected <- TRUE
+      bf.daily.tt$days.since.precip[row] <- 0
+    }
+  }
+  
+}
+rm(rain_data_detected,row)
+```
+
+## Determine what to do about NA values.
+
+For most of the time series analysis the program needs to know how to handle NA values. Not an easy thing to do in some cases. Omitting NA values creates a problem because the functions assume that a seasonal year is 365 days (integer closest to 365.25), but with NA values missing that will be wrong.
+
+```{r}
+tt_na_stats <- function(in.tbl_time) {
+  out.stats <- list()
+  # out.stats[["na_percent"]] <- list()
+  for(col in names(in.tbl_time)) {
+    out.stats[["na_percent"]][col] <- 100*sum(is.na(in.tbl_time[,col][[1]]))/length(in.tbl_time[,col][[1]])
+  }
+  return(out.stats)
+}
+
+tt_na_stats(bf.daily.tt)
+```
+
+There are only a couple of columns that have NA or NaN values. 
+
+* mean.spd
+* mean.dir.x
+* mean.dir.y
+* mean.temp
+
+### NA values in mean.temp
+
+It is pretty easy to handle NA values in TEMP. We can fill the positions with exptrapolated values because this will usually be close enough.
+
+```{r}
+bf.daily.tt$mean.temp <- trunc(zoo::na.approx(bf.daily.tt$mean.temp))
+tt_na_stats(bf.daily.tt)
+```
+
+### NA values in mean.dir
+
+NA values in mean.dir likely indicates there wasn't enough data in that field to get an average. Therefore, the best course of action is to replace both values with 0 which will indicate the direction wasn't moving in either the x direction or the y direction. Note that this could cause issues when trying to turn x and y values back into compass directions.
+
+```{r}
+bf.daily.tt$mean.dir.x <- ifelse(is.na(bf.daily.tt$mean.dir.x),0,bf.daily.tt$mean.dir.x)
+bf.daily.tt$mean.dir.y <- ifelse(is.na(bf.daily.tt$mean.dir.y),0,bf.daily.tt$mean.dir.y)
+tt_na_stats(bf.daily.tt)
+```
+
+### NA values in mean.spd
+
+NA values in speed are a bit harder to decide what to do with. There is no way of knowing whether the issue was that the machine measuring the data was down, or whether there just wasn't any speed. Also, wind is extremely variable from day to day. Therefore it is decided to replace values with 0 for the beginning analysis, even though this may not be the best idea.
+
+```{r}
+bf.daily.tt$mean.spd <- ifelse(is.na(bf.daily.tt$mean.spd),0,bf.daily.tt$mean.spd)
+tt_na_stats(bf.daily.tt)
+```
+
+### Inf values in any column
+
+Some of the values are Inf because of errors in handling missing data. There are only a few instances of this, therefore they will all be converted to 
+
+```{r}
+for(col in names(select(bf.daily.tt,-DATE_TIME))) {
+    bf.daily.tt[col] <- (1-is.infinite(bf.daily.tt[,col][[1]]))*bf.daily.tt[col]
+}
+rm(col)
+```
+
+
+### Plot Updated Daily Data
+
+#### Temperature
+
+```{r}
+temp.daily.xts <- xts(select(filter_time(bf.daily.tt, '2012' ~ '2017'),max.temp,mean.temp,min.temp),order.by = filter_time(bf.daily.tt, '2012' ~ '2017')$DATE_TIME)
+
+temp.daily.xts %>% dygraph(main="Daily Average Bowman Field Temperature (F)") %>%
+  dyAxis('y', label = "Temperature (F)") %>%
+  dyRangeSelector(dateWindow = c("2016-01-01","2017-12-31")) %>%
+  dyUnzoom()
+```
+
+
+#### Wind Direction
+
+```{r}
+dir.x.daily.xts <- xts(select(filter_time(bf.daily.tt, '2012' ~ '2017'),mean.dir.x),order.by = filter_time(bf.daily.tt, '2012' ~ '2017')$DATE_TIME)
+
+dir.x.daily.xts %>% dygraph(main="Average Daily Bowman Field Wind Direction (-1 < x < 1)") %>%
+  dyAxis('y', label = "Daily Wind Direction (Compass Degrees)") %>%
+  dyRangeSelector(dateWindow = c("2016-01-01","2017-12-31")) %>%
+  dyUnzoom()
+
+dir.y.daily.xts <- xts(select(filter_time(bf.daily.tt, '2012' ~ '2017'),mean.dir.y),order.by = filter_time(bf.daily.tt, '2012' ~ '2017')$DATE_TIME)
+
+dir.y.daily.xts %>% dygraph(main="Average Daily Bowman Field Wind Direction (-1 < y < 1)") %>%
+  dyAxis('y', label = "Daily Wind Direction (Compass Degrees)") %>%
+  dyRangeSelector(dateWindow = c("2016-01-01","2017-12-31")) %>%
+  dyUnzoom()
+```
+
+
+#### Wind Speed
+
+```{r}
+spd.daily.xts <- xts(select(filter_time(bf.daily.tt, '2012' ~ '2017'),mean.spd),order.by = filter_time(bf.daily.tt, '2012' ~ '2017')$DATE_TIME)
+
+spd.daily.xts %>% dygraph(main="Average Daily Bowman Field Wind Speed (mph)") %>%
+  dyAxis('y', label = "Wind speed (mph)") %>%
+  dyRangeSelector(dateWindow = c("2016-01-01","2017-12-31")) %>%
+  dyUnzoom()
+```
+
+
+#### Precipitation
+
+```{r}
+precip.daily.xts <- xts(select(filter_time(bf.daily.tt, '2012' ~ '2017'),sum.precip),order.by = filter_time(bf.daily.tt, '2012' ~ '2017')$DATE_TIME)
+
+precip.daily.xts %>% dygraph(main="Daily Bowman Field Precipitation (Inches)") %>%
+  dyAxis('y', label = "Precipitation (In)") %>%
+  dyRangeSelector(dateWindow = c("2016-01-01","2017-12-31")) %>%
+  dyUnzoom()
+```
+
+#### Days Since Last Rain
+
+```{r}
+days.since.precip.daily.xts <- xts(select(filter_time(bf.daily.tt, '2012' ~ '2017'),days.since.precip),order.by = filter_time(bf.daily.tt, '2012' ~ '2017')$DATE_TIME)
+
+days.since.precip.daily.xts %>% dygraph(main="Bowman Field Days Since Rain") %>%
+  dyAxis('y', label = "Days Since Rain") %>%
+  dyRangeSelector(dateWindow = c("2016-01-01","2017-12-31")) %>%
+  dyUnzoom()
+```
+

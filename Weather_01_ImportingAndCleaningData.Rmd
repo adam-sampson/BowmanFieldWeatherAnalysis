@@ -1,0 +1,313 @@
+---
+title: "Bowman Field Weather_01_Importing and Cleaning Data"
+output:
+  html_document:
+    fig_width: 8
+    df_print: paged
+    toc: yes
+  html_notebook:
+    fig_width: 8
+    toc: yes
+  pdf_document:
+    toc: yes
+---
+
+## Louisville Weather Time Series Analysis
+
+There is a lot of news about climate change and strange temperatures this year. In some areas with have the "bomb cyclone", and in other we have drought conditions. Living in Louisville I decided to take some time to see what the local data actually shows about trends in weather. 
+
+For this analysis I will be using a few packages which you will need loaded in order to follow along:
+
+```{r echo=TRUE, results='hide', message=FALSE, error=FALSE}
+# List of packages to load:
+packages <- c("tidyverse", "lubridate", "tibbletime", "rlang", "dygraphs", "forecast", "zoo", "xts", "stringr")
+  
+# Check to see whether any packages aren't installed on the computer and install
+new_packages <- packages[!(packages %in% installed.packages()[,"Package"])]
+if(length(new_packages)) install.packages(new_packages)
+  
+# Load Neccessary Packages
+sapply(packages, require, character.only = TRUE)
+rm(new_packages)
+```
+
+
+## Data Collection and Import
+
+The National Climate Data Center (NCDC) and National Centers for Environmental Information (NCEI) provides access to hourly weather data from the National Oceanic and Atmospheric Administration (NOAA) at [https://www7.ncdc.noaa.gov/CDO/cdopoemain.cmd?datasetabbv=DS3505&countryabbv=&georegionabbv=&resolution=40](https://www7.ncdc.noaa.gov/CDO/cdopoemain.cmd?datasetabbv=DS3505&countryabbv=&georegionabbv=&resolution=40) (Valid as of 02/04/2018 but slated for obsolecense in May of 2018). This form is the fastest way to get clean data. The link automatically cleans the data into a person readable format. So for ease of use I put in a request for the data I wanted and then downloaded the txt files.
+
+* Bowman Field Airport is Station ID 72423513810 and has data from 11/1941 to 02/2018 with a gap from 2000 to 2003. 
+* Bownam Fld is Station ID 72423599999 and has data from 01/2000 to 12/2003.
+
+* Louisville Standiford Field is ID 99999993821 and has data from 01/1948 to 12/1972. 
+* Louisville Intl_Standiford Field AP is ID 72423093821 and has data from 01/1973 to 02/2018
+* ***Warning: I asked a local expert about this station and he said the gage is too close to the asphalt and gives biased readings.***
+
+* Lexington Bluegrass Field is ID 99999993820 and has data from 01/2948 to 12/1972
+* Bluegrass Airport is ID 72422093820 and has data from 01/1973 to 02/2018. 
+* *Lexington is technically outside of Louisville, but provides a reasonably analogous data set which may be better than using the Louisville Airport data due to placement of the gages.*
+
+### Downloading data from the site
+
+I put in the following requests on the site: 
+
+For Lexington Data
+* US, Kentucky, Bluegrass Airport, 1973_01_01_00 to 2008_01_01_23.
+
+For Bowman Field Data there is some special work required because the name of the field changed in the  middle of the data set from 2000 to 2003.
+* US, Kentucky, Bowman Fld, 2000_01_01_00 to 2003_12_31_23.
+* US, Kentucky, Bowman Filed Airport, 1973_01_01_00 to 2008_01_01_23.
+
+After a few minutes the website processed process the file and send an email. Download the file to the working directory and then import the data to R.
+
+
+```{r echo=TRUE, results='hide', message=FALSE, error=FALSE}
+# Load Lexington Weather Data
+lexington.file <- c("5157227547406dat.txt")
+lex.df <- read.delim(lexington.file,header=TRUE, sep = "", as.is = TRUE, fill = TRUE)
+rm(lexington.file)
+
+# Make the YR..MODAHRMN easier to read
+colnames(lex.df)[3] <- "DATE_TIME"
+
+# Load Bowman Field Weather Data
+bf.file1 <- c("1973_01_01-2018_01_01-BowmanField.txt")
+bf.file2 <- c("2000_01_01-2003_12_31-BowmanField.txt")
+bf.df1 <- read.delim(bf.file1,header=TRUE, sep = "", as.is = TRUE, fill = TRUE)
+bf.df2 <- read.delim(bf.file2,header=TRUE, sep = "", as.is = TRUE, fill = TRUE)
+bf.df <- full_join(bf.df1,bf.df2)
+rm(bf.file1,bf.file2,bf.df1,bf.df2)
+
+# Make the YR..MODAHRMN easier to read
+colnames(bf.df)[3] <- "DATE_TIME"
+
+# Arrange Bowman Field Data by date because we are merging two sets of date data
+# and need the dates to be in ascending order
+bf.df <- bf.df %>% arrange(DATE_TIME)
+gc(verbose = TRUE)
+```
+
+### Clean up values that have special meaning
+
+Some of the values are non-numeric and have special meaning. 
+
+In the cloud ceiling column the value 722 means unlimted (aka no cloud ceiling).
+
+In all columns a * represents an NA value.
+
+```{r}
+clean_ncdc_df <- function(in.df) {
+  # Replace CLG values of 722 with Inf because of documentation
+  in.df[in.df[,"CLG"]=="722","CLG"] <- Inf
+
+  # Replace missing values marked by * with NA
+  for(col in names(in.df)) {
+    in.df[,col] <- str_replace_all(in.df[,col],"^[*]+$","NA")
+    in.df[in.df[,col]=="NA",col] <- NA
+  }
+  
+  
+  # Replace DIR values of 990 with NA. This means Variable...but we can't analyze variable.
+  # Unsure why some values are over 360. Can either use value %% 360 or can turn into NA.
+  # Using NA because unsure what the meaning is.
+  in.df[(is.na(in.df[,"DIR"])) | (in.df[,"DIR"] > "360"),"DIR"] <- NA
+  
+  # Done
+  return(in.df)
+}
+
+bf.df <- clean_ncdc_df(bf.df)
+lex.df <- clean_ncdc_df(lex.df)
+
+rm(clean_ncdc_df)
+```
+
+### Fix variable types in the data
+
+Two operations need to be performed to fix the variables types.
+
+First, the DATE_TIME field should be in date format.
+
+Second, the numeric items should be in numeric format
+
+* Note: Any fields with a character will be coerced to NA. In this case it is a good thing because a character in a numeric field indicates there was some anomaly with the data.
+
+```{r echo=TRUE, results='hide', message=FALSE, error=FALSE}
+bf.df$DATE_TIME <- ymd_hm(bf.df$DATE_TIME)
+lex.df$DATE_TIME <- ymd_hm(lex.df$DATE_TIME)
+  
+# The following fields are numberic data (or close enough)
+numeric.var <- c("USAF", "WBAN","DIR","SPD","GUS","CLG","VSB","TEMP","DEWP","ALT","PCP01","SD")
+for(col in numeric.var) {
+  bf.df[col] <- as.numeric(unlist(bf.df[col]))
+}
+for(col in numeric.var) {
+  lex.df[col] <- as.numeric(unlist(lex.df[col]))
+}
+rm(numeric.var)
+```
+
+### Only keep the columns needed for the analysis
+
+For this analysis we will only be using numeric data. We will keep:
+
+* Date/Time (the time index...)
+* Temperature
+* Dewpoint
+* Wind Direction
+* Wind Speed
+* Gust Speed
+* Cloud Ceiling
+* Visibility
+* Precipitation in Previous Hour
+
+```{r}
+colsToKeep <- c("DATE_TIME","TEMP","DEWP","DIR","SPD","GUS","CLG","VSB","PCP01")
+bf.df <- bf.df %>% select(colsToKeep)
+lex.df <- lex.df %>% select(colsToKeep)
+rm(colsToKeep)  
+```
+
+### Make this into a tibbletime object for analysis
+
+Converting into a tibbletime object is apparently the new way to use time series in R as of early 2018. 
+
+```{r}
+bf.tt <- as_tbl_time(bf.df,index = DATE_TIME)
+lex.tt <- as_tbl_time(lex.df, index = DATE_TIME)
+```
+
+Now let's plot some of the data to make sure this is working. Let's start with temperature because it is realatively clean data.
+
+```{r}
+par(mfrow=c(2,1))
+plot(x = bf.tt$DATE_TIME, y = bf.tt$TEMP, type = "n", main = "Bowman Field") +
+  lines(x = bf.tt$DATE_TIME, y = bf.tt$TEMP)
+plot(x = lex.tt$DATE_TIME, y = lex.tt$TEMP, type = "n", main = "Lexington") +
+  lines(x = lex.tt$DATE_TIME, y = lex.tt$TEMP)
+```
+
+Huzzah! We have two sets of data from 1973 through 2017!
+
+## Prepare data for Time Series Analysis
+
+### Make the data set regular
+
+Many time series functions use integer inputs to determine the length of a period. For example: one year is 365 daily values, one year is 24*365.25 hourly values, etc. Because these functions use an integer number of values as a period, any missing or extra values will cause problems. For instance, what happens if one year has exactly 385 daily values, but another year has 300 daily values? If we perform a moving average with a window of a 365 days there will be problems in the  moving average. 
+
+#### Check for regular data
+
+Let's first see if there are any missing hours in a year.
+
+```{r}
+bf.tt %>% 
+  collapse_by('yearly') %>%
+  group_by(DATE_TIME) %>%
+  select(DATE_TIME,TEMP) %>%
+  summarise(length = length(TEMP))
+```
+
+Notice that each year has a different length. This data is definitely not regular. There is a difference in length of almost 1,000 hours here.
+
+Now let's see if there are any hours with multiple readings.
+
+```{r}
+bf.tt %>% 
+  collapse_by('hourly') %>%
+  group_by(DATE_TIME) %>%
+  select(DATE_TIME,TEMP) %>%
+  summarise(count = n()) %>%
+  collapse_by('yearly') %>%
+  group_by(DATE_TIME) %>%
+  summarise(min_val_per_hour = min(count),max_val_per_hour = max(count))
+```
+
+Again our data isn't regular! Some hours have 1 value associated with them, and some have up to 5 values associated with them!
+
+#### Fix irregular data
+
+The weather data has BOTH missing hourly values AND extra hourly values.
+
+Now, let's fill in any missing rows so that our period of one [solar] year is correct. 
+
+```{r}
+## Note: this is old code. 
+# Need to update and use tibbletime::create_series(start ~ end, '1 hour')
+tt_add_missing_rows <- function(in.tbl_time, by = 'hour') {
+  # Programatically find the index column
+  index_column <- attributes(in.tbl_time)$index_quo[[2]]
+  
+  # Programatically find the first and last date/time in the index
+  start.idx <- start(in.tbl_time[,paste0(index_column)][[1]])
+  end.idx <- end(in.tbl_time[,paste0(index_column)][[1]])
+  
+  start <- in.tbl_time[start.idx,paste0(index_column)][[1]][[1]]
+  end <- in.tbl_time[end.idx,paste0(index_column)][[1]][[1]]
+  
+  seq.vec <- seq(start,end,by=by)
+  seq.df <- data.frame(seq.vec)
+    # Make the date/time column the same as for the other vector 
+    # so that merge by will auto detect.
+    names(seq.df)[1] <- paste(index_column)
+  
+  out.tbl_time <- merge(in.tbl_time,seq.df,all = TRUE)
+  out.tbl_time <- as_tbl_time(out.tbl_time, index = DATE_TIME)
+}
+
+bf.tt <- tt_add_missing_rows(bf.tt, by = 'hour')
+lex.tt <- tt_add_missing_rows(lex.tt, by = 'hour')
+```
+
+With all the rows there, let's remove extra hourly values by aggregating the hour using a mean of all values for that hour. (Note: There are half a million observations here...this takes a minute to aggregate...)
+
+```{r}
+tt_period_apply <- function(in.tbl_time, in.period, in.func = mean, na_rm = TRUE) {
+  # Programatically find the index column
+  index_column <- attributes(in.tbl_time)$index_quo[[2]]
+  # Collapse by period, group by index, then summarise by function.
+  out.tbl_time <- in.tbl_time %>%
+    collapse_by(in.period) %>%
+    group_by(!!! sym(index_column)) %>%
+    summarise_if(is.numeric, in.func, na.rm = na_rm)
+}
+
+bf.tt <- tt_period_apply(bf.tt, 'hourly', mean, na_rm = TRUE)
+lex.tt <- tt_period_apply(lex.tt, 'hourly', mean, na_rm = TRUE)
+```
+
+
+#### Check again for regular data
+
+Let's validate that we now have regular data (full of NA's).
+
+```{r}
+bf.tt %>% 
+  collapse_by('yearly') %>%
+  group_by(DATE_TIME) %>%
+  select(DATE_TIME,TEMP) %>%
+  summarise(length = length(TEMP))
+```
+
+There is some minor variation...but that is due to leap years and the fact that this is showing us a calendar year instead of a solar year.
+
+```{r}
+bf.tt %>% 
+  collapse_by('hourly') %>%
+  group_by(DATE_TIME) %>%
+  select(DATE_TIME,TEMP) %>%
+  summarise(count = n()) %>%
+  collapse_by('yearly') %>%
+  group_by(DATE_TIME) %>%
+  summarise(min_val_per_hour = min(count),max_val_per_hour = max(count))
+```
+
+Now we have regularly spaced hourly data! 
+
+## Save Data for future analysis
+
+```{r}
+save(bf.tt, file = "BowmanField_Weather.RData")
+save(lex.tt, file = "LexingtonAirport_Weather.RData")
+gc(verbose = TRUE)
+```
+
