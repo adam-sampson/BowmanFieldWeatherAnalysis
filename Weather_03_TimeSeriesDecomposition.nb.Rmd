@@ -1,0 +1,172 @@
+---
+title: "Louisville Weather Analysis_03_Time Series Decomposition"
+output:
+  html_document:
+    df_print: paged
+    toc: yes
+  html_notebook:
+    toc: yes
+  pdf_document:
+    toc: yes
+---
+
+## Louisville Weather Time Series Analysis
+
+This is the third in a series of files regarding the analysis of Weather Data in Louisville.
+
+For this analysis we will be using a few packages which you will need loaded in order to follow along:
+
+```{r echo=TRUE, results='hide', message=FALSE, error=FALSE}
+# List of packages to load:
+packages <- c("tidyverse", "lubridate", "tibbletime", "rlang", "dygraphs", "forecast", "zoo", "xts", "stringr")
+  
+# Check to see whether any packages aren't installed on the computer and install
+new_packages <- packages[!(packages %in% installed.packages()[,"Package"])]
+if(length(new_packages)) install.packages(new_packages)
+  
+# Load Neccessary Packages
+sapply(packages, require, character.only = TRUE)
+rm(new_packages)
+```
+
+
+## Data Import
+
+Data was imported, cleaned, and regularized in Weather_01. In order to import the data now we just need to load the RData file.
+
+This time series decomposition will use the daily data.
+
+```{r}
+load(file = "BowmanField_Weather_daily.RData")
+```
+
+
+## Time Series Decomposition
+
+### Temperature
+```{r fig.height = 5, fig.width = 8}
+start <- bf.daily.tt$DATE_TIME[start(bf.daily.tt$DATE_TIME)[[1]]][[1]]
+bf.mean.temp.ts <- ts(zoo::na.approx(bf.daily.tt$mean.temp), frequency = 365,start = start)
+
+acf(bf.mean.temp.ts, na.action = na.pass, lag.max = 365)
+```
+
+```{r fig.height = 7, fig.width = 8}
+mean.temp.decomp <- decompose(bf.mean.temp.ts, type = "multiplicative")
+par(mfrow=c(4,1))
+plot(mean.temp.decomp$trend, main = "Mean Temperature Decomposition")
+plot(mean.temp.decomp$seasonal)
+plot(mean.temp.decomp$random)
+plot(mean.temp.decomp$figure)
+
+# mean.temp.stl <- stl(bf.mean.temp.ts, s.window = "per")
+# plot(mean.temp.stl)
+# mean.temp.fcast <- forecast(mean.temp.stl, method = "rwdrift", biasadj = TRUE)
+# plot(mean.temp.fcast)
+```
+
+This decomposition shows that there is heavy seasonality in the mean temperature (no surprise there). One issue worth noting is that the random values out are still seasonal. The day-to-day variation is also seasonal, and we have only broken out the seasonality of predicting a random day in the season. 
+
+More work is needed to develop a better perdicitive model. However, this model clearly has yearly seasonality.
+
+The trend on this data might be going up slightly, but the data is too noisy to accurately determine whether it is trending up on this time scale. A much longer data set (not available) is required.
+
+### Wind Speed
+```{r fig.height = 5, fig.width = 8}
+start <- bf.daily.tt$DATE_TIME[start(bf.daily.tt$DATE_TIME)[[1]]][[1]]
+bf.mean.spd.ts <- ts(zoo::na.approx(bf.daily.tt$mean.spd), frequency = 365,start = start)
+
+acf(bf.mean.spd.ts, na.action = na.pass, lag.max = 365)
+```
+
+```{r fig.height = 7, fig.width = 8}
+mean.spd.decomp <- decompose(bf.mean.spd.ts, type = "additive")
+par(mfrow=c(4,1))
+plot(mean.spd.decomp$trend, main = "Mean Wind Speed Decomposition")
+plot(mean.spd.decomp$seasonal)
+plot(mean.spd.decomp$random)
+plot(mean.spd.decomp$figure)
+```
+
+Wind speed appears to show some seasonality when decomposed. However, the random value out appears to have some seasonality as well. It is difficult to tell whether this is because there isn't really a sesonality, or whether the seasonality is just not fitting well. 
+
+One interesting thing to note is that the trend of the decomposition is decreasing with time. If there isn't an error in removing the seasonality, this would indicate that there is a fairly clear long term downward trend in the mean wind speed. 
+
+### Wind Direction
+```{r fig.height = 5, fig.width = 8}
+start <- bf.daily.tt$DATE_TIME[start(bf.daily.tt$DATE_TIME)[[1]]][[1]]
+bf.mean.dir.x.ts <- ts(zoo::na.approx(bf.daily.tt$mean.dir.x), frequency = 365,start = start)
+
+acf(bf.mean.dir.x.ts, na.action = na.pass, lag.max = 365)
+```
+
+```{r fig.height = 7, fig.width = 8}
+mean.dir.x.decomp <- decompose(bf.mean.dir.x.ts, type = "multiplicative")
+par(mfrow=c(4,1))
+plot(mean.dir.x.decomp$trend, main = "Mean Wind Direction Decomposition - X Direction")
+plot(mean.dir.x.decomp$seasonal)
+plot(mean.dir.x.decomp$random)
+plot(mean.dir.x.decomp$figure)
+```
+
+```{r fig.height = 5, fig.width = 8}
+start <- bf.daily.tt$DATE_TIME[start(bf.daily.tt$DATE_TIME)[[1]]][[1]]
+bf.mean.dir.y.ts <- ts(zoo::na.approx(bf.daily.tt$mean.dir.y), frequency = 365,start = start)
+
+acf(bf.mean.dir.y.ts, na.action = na.pass, lag.max = 365)
+```
+
+```{r fig.height = 7, fig.width = 8}
+mean.dir.y.decomp <- decompose(bf.mean.dir.y.ts, type = "multiplicative")
+par(mfrow=c(4,1))
+plot(mean.dir.y.decomp$trend, main = "Mean Wind Direction Decomposition - Y Direction")
+plot(mean.dir.y.decomp$seasonal)
+plot(mean.dir.y.decomp$random)
+plot(mean.dir.y.decomp$figure)
+```
+
+The results from the wind direction are that the data is likely not seasonal. The ACF indicates this, and the decomposition provides strange output with large random values. 
+
+Recommendation is that wind direction should be used directly in regression or correlation analysis as it does not show auto-correlation.
+
+### Rain Quantity
+```{r fig.height = 5, fig.width = 8}
+start <- bf.daily.tt$DATE_TIME[start(bf.daily.tt$DATE_TIME)[[1]]][[1]]
+bf.precip.ts <- ts(zoo::na.approx(filter_time(bf.daily.tt,'2001' ~ '2017')$sum.precip), frequency = 365,start = start)
+
+acf(bf.precip.ts, na.action = na.pass, lag.max = 365)
+```
+
+```{r fig.height = 7, fig.width = 8}
+precip.decomp <- decompose(bf.precip.ts, type = "multiplicative")
+par(mfrow=c(4,1))
+plot(precip.decomp$trend, main = "Mean Wind Speed Decomposition")
+plot(precip.decomp$seasonal)
+plot(precip.decomp$random)
+plot(precip.decomp$figure)
+```
+
+The amount of precipitation does not show strong autocorrelation, but appears to possibly have some minor autocorrelation. 
+
+Recommend to use the amount of rainfall in regression and correlation without performing time series analysis on it since the autocorrelation is small.
+
+### Days Since Rain
+```{r fig.height = 5, fig.width = 8}
+start <- bf.daily.tt$DATE_TIME[start(bf.daily.tt$DATE_TIME)[[1]]][[1]]
+bf.days.since.precip.ts <- ts(zoo::na.approx(filter_time(bf.daily.tt,'2001' ~ '2017')$days.since.precip), frequency = 365,start = start)
+
+acf(bf.days.since.precip.ts, na.action = na.pass, lag.max = 365)
+```
+
+```{r fig.height = 7, fig.width = 8}
+days.since.precip.decomp <- decompose(bf.days.since.precip.ts, type = "multiplicative")
+par(mfrow=c(4,1))
+plot(days.since.precip.decomp$trend, main = "Mean Wind Speed Decomposition")
+plot(days.since.precip.decomp$seasonal)
+plot(days.since.precip.decomp$random)
+plot(days.since.precip.decomp$figure)
+
+# Let's try 4 days 
+```
+
+Days since rain shows that the most important value for autocorrelation is the days just before the event. It does not appear to have seasonality, but rather is cyclical in that there is commonly rain for a set period of time followed by a repreive of a certain amount of time. This is specific to Louisville and would be different in other locales where the rain is more seasonal instead of occuring consistently throughout the year.
