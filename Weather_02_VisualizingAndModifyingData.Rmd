@@ -357,3 +357,9 @@ days.since.precip.daily.xts %>% dygraph(main="Bowman Field Days Since Rain") %>%
   dyUnzoom()
 ```
 
+## Save data for future analysis
+
+```{r}
+save(bf.daily.tt, file = "BowmanField_Weather_Daily.RData")
+```
+

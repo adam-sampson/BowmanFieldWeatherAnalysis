@@ -39,20 +39,10 @@ The National Climate Data Center (NCDC) and National Centers for Environmental I
 * Bowman Field Airport is Station ID 72423513810 and has data from 11/1941 to 02/2018 with a gap from 2000 to 2003. 
 * Bownam Fld is Station ID 72423599999 and has data from 01/2000 to 12/2003.
 
-* Louisville Standiford Field is ID 99999993821 and has data from 01/1948 to 12/1972. 
-* Louisville Intl_Standiford Field AP is ID 72423093821 and has data from 01/1973 to 02/2018
-* ***Warning: I asked a local expert about this station and he said the gage is too close to the asphalt and gives biased readings.***
-
-* Lexington Bluegrass Field is ID 99999993820 and has data from 01/2948 to 12/1972
-* Bluegrass Airport is ID 72422093820 and has data from 01/1973 to 02/2018. 
-* *Lexington is technically outside of Louisville, but provides a reasonably analogous data set which may be better than using the Louisville Airport data due to placement of the gages.*
 
 ### Downloading data from the site
 
-I put in the following requests on the site: 
-
-For Lexington Data
-* US, Kentucky, Bluegrass Airport, 1973_01_01_00 to 2008_01_01_23.
+Put in the following requests on the site: 
 
 For Bowman Field Data there is some special work required because the name of the field changed in the  middle of the data set from 2000 to 2003.
 * US, Kentucky, Bowman Fld, 2000_01_01_00 to 2003_12_31_23.
@@ -62,14 +52,6 @@ After a few minutes the website processed process the file and send an email. Do
 
 
 ```{r echo=TRUE, results='hide', message=FALSE, error=FALSE}
-# Load Lexington Weather Data
-lexington.file <- c("5157227547406dat.txt")
-lex.df <- read.delim(lexington.file,header=TRUE, sep = "", as.is = TRUE, fill = TRUE)
-rm(lexington.file)
-
-# Make the YR..MODAHRMN easier to read
-colnames(lex.df)[3] <- "DATE_TIME"
-
 # Load Bowman Field Weather Data
 bf.file1 <- c("1973_01_01-2018_01_01-BowmanField.txt")
 bf.file2 <- c("2000_01_01-2003_12_31-BowmanField.txt")
@@ -117,7 +99,6 @@ clean_ncdc_df <- function(in.df) {
 }
 
 bf.df <- clean_ncdc_df(bf.df)
-lex.df <- clean_ncdc_df(lex.df)
 
 rm(clean_ncdc_df)
 ```
@@ -134,15 +115,11 @@ Second, the numeric items should be in numeric format
 
 ```{r echo=TRUE, results='hide', message=FALSE, error=FALSE}
 bf.df$DATE_TIME <- ymd_hm(bf.df$DATE_TIME)
-lex.df$DATE_TIME <- ymd_hm(lex.df$DATE_TIME)
-  
+ 
 # The following fields are numberic data (or close enough)
 numeric.var <- c("USAF", "WBAN","DIR","SPD","GUS","CLG","VSB","TEMP","DEWP","ALT","PCP01","SD")
 for(col in numeric.var) {
   bf.df[col] <- as.numeric(unlist(bf.df[col]))
-}
-for(col in numeric.var) {
-  lex.df[col] <- as.numeric(unlist(lex.df[col]))
 }
 rm(numeric.var)
 ```
@@ -164,7 +141,6 @@ For this analysis we will only be using numeric data. We will keep:
 ```{r}
 colsToKeep <- c("DATE_TIME","TEMP","DEWP","DIR","SPD","GUS","CLG","VSB","PCP01")
 bf.df <- bf.df %>% select(colsToKeep)
-lex.df <- lex.df %>% select(colsToKeep)
 rm(colsToKeep)  
 ```
 
@@ -174,17 +150,14 @@ Converting into a tibbletime object is apparently the new way to use time series
 
 ```{r}
 bf.tt <- as_tbl_time(bf.df,index = DATE_TIME)
-lex.tt <- as_tbl_time(lex.df, index = DATE_TIME)
 ```
 
 Now let's plot some of the data to make sure this is working. Let's start with temperature because it is realatively clean data.
 
 ```{r}
-par(mfrow=c(2,1))
+#par(mfrow=c(2,1))
 plot(x = bf.tt$DATE_TIME, y = bf.tt$TEMP, type = "n", main = "Bowman Field") +
   lines(x = bf.tt$DATE_TIME, y = bf.tt$TEMP)
-plot(x = lex.tt$DATE_TIME, y = lex.tt$TEMP, type = "n", main = "Lexington") +
-  lines(x = lex.tt$DATE_TIME, y = lex.tt$TEMP)
 ```
 
 Huzzah! We have two sets of data from 1973 through 2017!
@@ -255,7 +228,6 @@ tt_add_missing_rows <- function(in.tbl_time, by = 'hour') {
 }
 
 bf.tt <- tt_add_missing_rows(bf.tt, by = 'hour')
-lex.tt <- tt_add_missing_rows(lex.tt, by = 'hour')
 ```
 
 With all the rows there, let's remove extra hourly values by aggregating the hour using a mean of all values for that hour. (Note: There are half a million observations here...this takes a minute to aggregate...)
@@ -272,7 +244,6 @@ tt_period_apply <- function(in.tbl_time, in.period, in.func = mean, na_rm = TRUE
 }
 
 bf.tt <- tt_period_apply(bf.tt, 'hourly', mean, na_rm = TRUE)
-lex.tt <- tt_period_apply(lex.tt, 'hourly', mean, na_rm = TRUE)
 ```
 
 
@@ -307,7 +278,6 @@ Now we have regularly spaced hourly data!
 
 ```{r}
 save(bf.tt, file = "BowmanField_Weather.RData")
-save(lex.tt, file = "LexingtonAirport_Weather.RData")
 gc(verbose = TRUE)
 ```
 
