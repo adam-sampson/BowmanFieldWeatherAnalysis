@@ -15,7 +15,7 @@ For this analysis I will be using a few packages which you will need loaded in o
 
 ```{r echo=TRUE, results='hide', message=FALSE, error=FALSE}
 # List of packages to load:
-packages <- c("tidyverse", "lubridate", "tibbletime", "rlang", "dygraphs", "forecast", "zoo")
+packages <- c("tidyverse", "lubridate", "tibbletime", "rlang", "dygraphs", "forecast", "zoo", "xts", "stringr")
   
 # Check to see whether any packages aren't installed on the computer and install
 new_packages <- packages[!(packages %in% installed.packages()[,"Package"])]
@@ -57,7 +57,7 @@ After a few minutes the website processed process the file and send an email. Do
 
 
 ```{r echo=TRUE, results='hide', message=FALSE, error=FALSE}
-# Load Lexington Data
+# Load Lexington Weather Data
 lexington.file <- c("5157227547406dat.txt")
 lex.df <- read.delim(lexington.file,header=TRUE, sep = "", as.is = TRUE, fill = TRUE)
 rm(lexington.file)
@@ -65,7 +65,7 @@ rm(lexington.file)
 # Make the YR..MODAHRMN easier to read
 colnames(lex.df)[3] <- "DATE_TIME"
 
-# Load Bowman Field Data
+# Load Bowman Field Weather Data
 bf.file1 <- c("1973_01_01-2018_01_01-BowmanField.txt")
 bf.file2 <- c("2000_01_01-2003_12_31-BowmanField.txt")
 bf.df1 <- read.delim(bf.file1,header=TRUE, sep = "", as.is = TRUE, fill = TRUE)
@@ -286,7 +286,40 @@ bf.tt %>%
   summarise(min_val_per_hour = min(count),max_val_per_hour = max(count))
 ```
 
-Now we have regularly spaced hourly data! Ready to move on to perform analysis.
+Now we have regularly spaced hourly data! Ready to move on.
+
+
+
+## Visualize Data and Make Adjustments as Needed
+
+### Plot Data and discuss
+
+#### Temperature
+
+```{r}
+temp.xts <- xts(select(bf.tt,TEMP),order.by = bf.tt$DATE_TIME)
+
+temp.xts %>% dygraph(main="Bowman Field Temperature (F)") %>%
+  dyAxis('y', label = "Temperature (F)") %>%
+  dySeries("TEMP", axis = 'y') %>%
+  dyRangeSelector(dateWindow = c("2016-01-01","2017-12-31")) %>%
+  dyUnzoom()
+```
+
+A review of the graph shows a couple of things of interest. The first interesting thing is that there is a wide variation in daily temperatures, but it appears that there may be more variation between days during the winter than during the summer. It might be better to use daily Max/Min/Mean data for this analysis than to use hourly data.
+
+#### Wind Speed
+
+```{r}
+temp.xts <- xts(select(bf.tt,TEMP),order.by = bf.tt$DATE_TIME)
+
+temp.xts %>% dygraph(main="Bowman Field Wind Direction (Compass Degrees)") %>%
+  dyAxis('y', label = "Wind Direction (Compass Degrees)") %>%
+  dySeries("DIR", axis = 'y') %>%
+  dyRangeSelector(dateWindow = c("2016-01-01","2017-12-31")) %>%
+  dyUnzoom()
+```
+
 
 ### Determine what to do about NA values.
 
@@ -297,9 +330,13 @@ For most of the time series analysis the program needs to know how to handle NA 
 It is pretty easy to handle NA values in TEMP. Most of the missing data is just an hour or two in a row. And temperature data is autocorrelated heavily with the last reading. So we can fill with extrapoloated values. 
 
 ```{r}
-bf.approx.tt <- bf.tt
-bf.approx.tt$TEMP <- trunc(zoo::na.approx(bf.tt$TEMP))
+# bf.approx.tt <- bf.tt
+# bf.approx.tt$TEMP <- trunc(zoo::na.approx(bf.tt$TEMP))
 ```
+
+
+
+
 
 
 ## Perform Time Series Analysis
@@ -308,22 +345,22 @@ bf.approx.tt$TEMP <- trunc(zoo::na.approx(bf.tt$TEMP))
 
 Since temperature is fairly clean data and easy to use a decomposition is done below. 
 ```{r fig.height = 7, fig.width = 8}
-start <- bf.approx.tt[start(bf.approx.tt[,1][[1]])[1],1][[1]]
-bf.temp.ts <- ts(bf.approx.tt$TEMP, frequency = 24*365.25, start = start)
-
-acf(bf.temp.ts)
-
-temp.decomp <- decompose(bf.temp.ts, type = "multiplicative")
-par(mfrow=c(4,1))
-plot(temp.decomp$trend)
-plot(temp.decomp$seasonal)
-plot(temp.decomp$random)
-plot(temp.decomp$figure)
-
-bf.temp.stl <- stl(bf.temp.ts, s.window="per", robust=TRUE)
-plot(bf.temp.stl)
-fcast <- forecast(bf.temp.stl, method = "naive")
-plot(fcast)
+# start <- bf.approx.tt[start(bf.approx.tt[,1][[1]])[1],1][[1]]
+# bf.temp.ts <- ts(bf.approx.tt$TEMP, frequency = 24*365.25, start = start)
+# 
+# acf(bf.temp.ts)
+# 
+# temp.decomp <- decompose(bf.temp.ts, type = "multiplicative")
+# par(mfrow=c(4,1))
+# plot(temp.decomp$trend)
+# plot(temp.decomp$seasonal)
+# plot(temp.decomp$random)
+# plot(temp.decomp$figure)
+# 
+# bf.temp.stl <- stl(bf.temp.ts, s.window="per", robust=TRUE)
+# plot(bf.temp.stl)
+# fcast <- forecast(bf.temp.stl, method = "naive")
+# plot(fcast)
 ```
 
 #### Reviewing Temperature Decomposition Results
