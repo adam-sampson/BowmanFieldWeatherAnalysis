@@ -1,0 +1,241 @@
+---
+title: "Air Quality Time Series Report"
+author: "Adam Sampson, Jay Bektasevic, Brenden McGale, Andrew Brill, Taylor Maxson"
+date: "February 20, 2018"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE, echo=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+# List of packages to load:
+packages <- c("tidyverse", "lubridate", "tibbletime", "rlang", "dygraphs", "forecast", "zoo", "xts", "stringr", "knitr", "kableExtra", "ggplot2")
+  
+# Check to see whether any packages aren't installed on the computer and install
+new_packages <- packages[!(packages %in% installed.packages()[,"Package"])]
+if(length(new_packages)) install.packages(new_packages)
+  
+# Load Neccessary Packages
+sapply(packages, require, character.only = TRUE)
+rm(new_packages)
+```
+
+# **Introduction**
+
+This report is an analysis of data related to air quality. The exploratory question this report investigates is: How closely does weather data correlate with air quality data in Louisville?
+
+# **Datasets**
+
+## Weather Data
+
+Hourly weather data was retrieved for Bowman Field Weather Station using the NCDC / NOAA simplified weather data download form at: <https://www7.ncdc.noaa.gov/CDO/cdopoemain.cmd?datasetabbv=DS3505&countryabbv=&georegionabbv=&resolution=40>.
+
+```{r echo=FALSE}
+load('weather_info.RData')
+weather_desc.df <- 
+  data.frame(matrix(names(weather.info$Description),
+                    nrow = 33)) %>%
+  data.frame(matrix(unlist(weather.info$Description),
+                    nrow = 33, 
+                    ncol = 1, 
+                    byrow = T)) 
+names(weather_desc.df) <- c("col_name","description")
+weather_desc.df <- weather_desc.df %>%
+  filter(col_name == "DATE_TIME"|
+           col_name == "DIR"|
+           col_name == "SPD"|
+           col_name == "TEMP"|
+           col_name == "PCP01")
+rm(weather.info)
+knitr::kable(weather_desc.df, booktabs = TRUE) 
+```
+
+## Air Quality Data
+
+<!-- Insert discussion and chart here -->
+
+# **Techniques**
+
+## Data Cleaning
+
+### Cleaning Weather Data
+
+| Variable  | Cleanup                       |
+|-----------|-------------------------------|
+| Date_TIME | Clean                         |
+| DIR       | Any \* in field indicates NA  |
+|           | 990 - Variable - NA           |
+|           | \>360 - Uncertain - NA        |
+| SPD       | Any \* in field indicates NA  |
+| TEMP      | Any \* in field indicates NA  |
+| PCP01     | Any \* in field indicates NA  |
+  
+## Converting Variables
+
+### Converting Wind Compass Direction to Inverval Data
+
+Wind data is recieved in compass degrees. This is problematic when performing calculations because 0/360 degrees is between 350 degrees and 10 degrees, but the mathematical average of 350 degrees and 10 degrees is 180 which is exactly the opposite of the true average direction.
+
+One way to make this work better is to convert from polar coordinates to cartesian coordinates.
+
+```{r fig.width=2, fig.height=2, fig.align='center' ,echo=FALSE}
+gg_circle <- function(r, xc, yc, color="black", fill=NA, ...) {
+    x <- xc + r*cos(seq(0, pi, length.out=100))
+    ymax <- yc + r*sin(seq(0, pi, length.out=100))
+    ymin <- yc + r*sin(seq(0, -pi, length.out=100))
+    annotate("ribbon", x=x, ymin=ymin, ymax=ymax, color=color, fill=fill, ...)
+}
+  
+ggplot() +
+  xlim(-1.1,1.1) +
+  ylim(-1.1,1.1) +
+  gg_circle(r=1,xc=0,yc=0) +
+  geom_text(aes(label = "0 deg"),x=0,y=1.1) +
+  geom_text(aes(label = "180 deg"), x=0, y=-1.1) +
+  geom_line(aes(x=c(0,0.707),y=c(0,0.707))) +
+  geom_line(aes(x=c(0,0),y=c(0,0.707)),linetype = 2) +
+  geom_line(aes(x=c(0,0.707),y=c(0.707,0.707)),linetype = 2) +
+  geom_text(aes(label = "dir"), x=0.1,y=0.25) +
+  theme_minimal() + 
+  theme(aspect.ratio = 1,
+        axis.title = element_blank(),
+        axis.text = element_blank(),
+        panel.background = element_blank(),
+        panel.grid = element_blank())
+```
+
+$$ sin(dir) = \frac{x}{1} \rightarrow x = sin(dir*\frac{180}{\Pi}) $$
+$$ cos(dir) = \frac{y}{1} \rightarrow y = cos(dir*\frac{180}{\Pi}) $$
+
+An interesting bi-product of this transformation is that it is now possible to have a wind direction of {0,0} when there is no wind speed and lack of wind does not necessarily mean that wind direction has to be removed from calculations as NA.
+
+## Aggregating Data
+
+### Aggregating Weather Data to Daily
+
+The Air Quality data is in daily format. Therefore it makes sense to aggregate the weather data to daily values as well. 
+
+| Input     | Output(s)         |
+|-----------|-------------------|
+| TEMP      | min / mean / max  |  
+| x.dir     | min / mean / max  |
+| y.dir     | min / mean / max  |
+| SPD       | min / mean / max  |
+| PCP01     | sum               |
+
+## Extracting addional information
+
+### Extracting Frequency Data from Precipitation
+
+## Dealing with NA values
+
+### Imputing NA values in Weather Data
+
+| Input     | Impute Method     |
+|-----------|-------------------|
+| TEMP      | na.approx         |  
+| x.dir     | 0 if NA           |
+| y.dir     | 0 if NA           |
+| SPD       | na.approx         |
+| PCP01     | 0 if NA           |
+
+## Checking for Seasonality and Cycles
+
+The Autocorrelation of variables was checked using the `acf()` function.
+
+### Weather Data Seasonality
+
+The charts below show that some of the weather data is seasonaly correlated over a year, and one of the sets of data is cyclically correlated to recent days.
+
+* Wind Direction is not seasonally correlated. There is a minor correlation to the day before, but minimal correlation beyond 2 days.
+* Wind speed is seasonally correlated on a yearly basis.
+* Temperature is seasonally correlated on a yearly basis. 
+  + As expected
+* Daily Precipitation is autocorrelated all over the place. For Louisville it appears that there is often rain followed by several days of no rain and then repeating.
+  + This is siginficantly different from western states where rain is seasonally correlated to the time of year with wet winters and dry summers.
+  + It may be possible to correlate amount of rain on a seasonal basis still
+* Days since last rain is autocorrelated over several days and falling off the farther you get from 0 days. This re-enforces the concept that rain is correlated heavily to whether it rained recently or not.
+
+```{r fig.width=8, fig.height=8, echo=FALSE}
+load('BowmanField_Weather_Daily.RData')
+
+par(mfrow=c(3,2))
+  acf(bf.daily.tt$mean.dir.x, na.action = na.pass, lag.max = 365, 
+      main='Mean Wind Dir X')
+  acf(bf.daily.tt$mean.dir.y, na.action = na.pass, lag.max = 365, 
+      main='Mean Wind Dir Y')
+  acf(bf.daily.tt$mean.spd, na.action = na.pass, lag.max = 365, 
+      main='Mean Wind Speed')
+  acf(bf.daily.tt$mean.temp, na.action = na.pass, lag.max = 365, 
+      main='Mean Temperature (F)')
+  acf(bf.daily.tt$sum.precip, na.action = na.pass, lag.max = 365, 
+      main='Daily Precipitation')
+  acf(bf.daily.tt$days.since.precip, na.action = na.pass, lag.max = 365, 
+      main='Days Since Precipitation')
+```
+
+## Decomposition
+
+### Weather Data Decomposition
+
+For weather data it only makes sense to decompose Temperature, Wind Speed, and Rain Amount based on the results of the `acf()`. 
+
+#### Mean Daily Temperature
+
+The plots below show that mean daily temperature is seasonal over a yearly period. Interestingly, the random component is still seasonally affected. This is likely because the day-to-day variation changes between seasons. More advanced methods are needed to deal with this, however this decomposition should be sufficient for comparing to air quality data.
+
+It is difficult to tell from this time-frame whether there is a real trend in temperature. More detailed analysis is required for that.
+
+```{r fig.height = 7, fig.width = 8, echo=FALSE}
+start <- bf.daily.tt$DATE_TIME[start(bf.daily.tt$DATE_TIME)[[1]]][[1]]
+bf.mean.temp.ts <- ts(zoo::na.approx(bf.daily.tt$mean.temp), frequency = 365,start = start)
+
+mean.temp.decomp <- decompose(bf.mean.temp.ts, type = "multiplicative")
+par(mfrow=c(4,1))
+plot(mean.temp.decomp$trend, main = "Mean Temperature Decomposition")
+plot(mean.temp.decomp$seasonal)
+plot(mean.temp.decomp$random)
+plot(mean.temp.decomp$figure)
+```
+
+#### Mean Daily Wind Speed
+
+The decomposition shows that there is likely yearly seasonality in the wind speed data. Once again, the random output shows likely seasonality as well. This indicates further work is required to finish the decomposition.
+
+The trend retrieved from this decomposition is interesting. It shows that average daily wind speed is decreasing since 1973. 
+
+```{r fig.height = 7, fig.width = 8, echo=FALSE}
+start <- bf.daily.tt$DATE_TIME[start(bf.daily.tt$DATE_TIME)[[1]]][[1]]
+bf.mean.spd.ts <- ts(zoo::na.approx(bf.daily.tt$mean.spd), frequency = 365,start = start)
+
+mean.spd.decomp <- decompose(bf.mean.spd.ts, type = "additive")
+par(mfrow=c(4,1))
+plot(mean.spd.decomp$trend, main = "Mean Wind Speed Decomposition")
+plot(mean.spd.decomp$seasonal)
+plot(mean.spd.decomp$random)
+plot(mean.spd.decomp$figure)
+```
+
+#### Daily Precipitation Decomposition
+
+The decomposition of rainfall is fairly inconclusive. Visual review of the charts suggest that there may be higher daily rainfall possible during summer months (when there are thunderstorms and hurricanes), but the decomposition is not clean.
+
+The data either needs to be transformed or a different method of decomposition needs to be used to validate whether the thunderstorm hypothesis is correct. 
+
+For the needs of this analysis it would be better to simply compare rainfall to air quality data with and without lag.
+
+```{r fig.height = 7, fig.width = 8, echo=FALSE}
+start <- bf.daily.tt$DATE_TIME[start(bf.daily.tt$DATE_TIME)[[1]]][[1]]
+bf.precip.ts <- ts(zoo::na.approx(filter_time(bf.daily.tt,'2001' ~ '2017')$sum.precip), frequency = 365,start = start)
+
+precip.decomp <- decompose(bf.precip.ts, type = "multiplicative")
+par(mfrow=c(4,1))
+plot(precip.decomp$trend, main = "Daily Precipitation Decomposition")
+plot(precip.decomp$seasonal)
+plot(precip.decomp$random)
+plot(precip.decomp$figure)
+```
+
+# **Conclusion**
