@@ -107,7 +107,7 @@ Data was aquired from the EPA website there are several monitoring stations in J
     
   
 
-    #par(mfrow = c(4, 1))
+    par(mfrow = c(4, 1))
     plot(ozone$Date , ozone$avg.measurement , pch = 20, xlim = range(ozone$Date, na.rm = TRUE), 
          ylim = range(ozone$avg.measurement, na.rm = T), xlab = "", ylab = "ppm")
     title("Ozone 1990 - 2017")
@@ -174,3 +174,83 @@ row.names(df)<-NULL
 
 ### Correlations with other pollutants
 In order to examine the cause of pollution we will need to look at correlation between the PM2.5 and other weather variables such as temperature, wind, and precipitation.  
+
+
+```{r}
+    load(file = "BowmanField_Weather_daily.RData")
+#   Convert date to common format for merging
+    bf.daily.tt$DATE_TIME <- as.Date(bf.daily.tt$DATE_TIME, format = "%Y-%m-%d")
+    EPA_data$Date <- as.Date(EPA_data$Date, format = "%Y-%m-%d")
+#   AQI$Date <- as.Date(AQI$Date, format = "%Y-%m-%d")
+#   AQI_merge <- as.data.frame( left_join(AQI, bf.daily.tt, by = c("Date"="DATE_TIME")))
+#   Merge the two datasets
+    comb_data <- as.data.frame( left_join(EPA_data, bf.daily.tt, by = c("Date"="DATE_TIME")))
+```
+
+Now we can plot the variables and see if they corrlate with each other.
+```{r}
+        par(mfrow = c(2, 2))
+         plot(comb_data[comb_data$AQS_PARAMETER_DESC =="PM2.5 - Local Conditions", "mean.temp"], 
+             comb_data[comb_data$AQS_PARAMETER_DESC =="PM2.5 - Local Conditions", "Measurement"],
+             xlab = "Mean Temp. (F)", ylab = expression(PM[2.5] * " (" * mu * g/m^3 * ")"))
+        title("PM 2.5 vs. Mean Temp. (1990 - 2017)")
+        abline(lm(comb_data[comb_data$AQS_PARAMETER_DESC =="PM2.5 - Local Conditions", "Measurement"] ~
+                  comb_data[comb_data$AQS_PARAMETER_DESC =="PM2.5 - Local Conditions", "mean.temp"]), col = "red")
+        print(cor(comb_data[comb_data$AQS_PARAMETER_DESC =="PM2.5 - Local Conditions", "mean.temp"], 
+             comb_data[comb_data$AQS_PARAMETER_DESC =="PM2.5 - Local Conditions", "Measurement"]))
+
+
+        
+           plot(comb_data[comb_data$AQS_PARAMETER_DESC =="PM2.5 - Local Conditions", "mean.spd"], 
+             comb_data[comb_data$AQS_PARAMETER_DESC =="PM2.5 - Local Conditions", "Measurement"],
+             xlab = "Mean Wind Speed", ylab = expression(PM[2.5] * " (" * mu * g/m^3 * ")"))
+        title("PM 2.5 vs. Mean Wind Speed (1990 - 2017)")
+        abline(lm(comb_data[comb_data$AQS_PARAMETER_DESC =="PM2.5 - Local Conditions", "Measurement"] ~
+                  comb_data[comb_data$AQS_PARAMETER_DESC =="PM2.5 - Local Conditions", "mean.spd"]), col = "red")
+        print(cor(comb_data[comb_data$AQS_PARAMETER_DESC =="PM2.5 - Local Conditions", "mean.spd"], 
+             comb_data[comb_data$AQS_PARAMETER_DESC =="PM2.5 - Local Conditions", "Measurement"]))
+                
+        
+          plot(comb_data[comb_data$AQS_PARAMETER_DESC =="PM2.5 - Local Conditions", "sum.precip"], 
+             comb_data[comb_data$AQS_PARAMETER_DESC =="PM2.5 - Local Conditions", "Measurement"],
+             xlab = "Precipitation (Inches)", ylab = expression(PM[2.5] * " (" * mu * g/m^3 * ")"))
+        title("PM 2.5 vs. Precipitation (1990 - 2017)")
+        abline(lm(comb_data[comb_data$AQS_PARAMETER_DESC =="PM2.5 - Local Conditions", "Measurement"] ~
+                  comb_data[comb_data$AQS_PARAMETER_DESC =="PM2.5 - Local Conditions", "sum.precip"]), col = "red")
+        print(cor(comb_data[comb_data$AQS_PARAMETER_DESC =="PM2.5 - Local Conditions", "sum.precip"], 
+             comb_data[comb_data$AQS_PARAMETER_DESC =="PM2.5 - Local Conditions", "Measurement"]))
+        
+        
+        plot(comb_data[comb_data$AQS_PARAMETER_DESC =="PM2.5 - Local Conditions", "DAILY_AQI_VALUE"], 
+             comb_data[comb_data$AQS_PARAMETER_DESC =="PM2.5 - Local Conditions", "Measurement"],
+             xlab = "Air Quality Index", ylab = expression(PM[2.5] * " (" * mu * g/m^3 * ")"))
+        title("PM 2.5 vs. AQI (1990 - 2017)")
+        abline(lm(comb_data[comb_data$AQS_PARAMETER_DESC =="PM2.5 - Local Conditions", "Measurement"] ~
+                  comb_data[comb_data$AQS_PARAMETER_DESC =="PM2.5 - Local Conditions", "DAILY_AQI_VALUE"]), col = "red")
+        print(cor(comb_data[comb_data$AQS_PARAMETER_DESC =="PM2.5 - Local Conditions", "DAILY_AQI_VALUE"], 
+             comb_data[comb_data$AQS_PARAMETER_DESC =="PM2.5 - Local Conditions", "Measurement"]))     
+        
+        
+        
+        
+         plot(comb_data[comb_data$AQS_PARAMETER_DESC =="Ozone", "mean.temp"], 
+             comb_data[comb_data$AQS_PARAMETER_DESC =="Ozone", "Measurement"],
+             xlab = "Mean Temp. (F)", ylab = "Ozone (ppm)")
+        title("Ozone vs. Mean Temp. (1990 - 2017)")
+        abline(lm(comb_data[comb_data$AQS_PARAMETER_DESC =="Ozone", "Measurement"] ~
+                  comb_data[comb_data$AQS_PARAMETER_DESC =="Ozone", "mean.temp"]), col = "red")
+        print(cor(comb_data[comb_data$AQS_PARAMETER_DESC =="Ozone", "mean.temp"], 
+             comb_data[comb_data$AQS_PARAMETER_DESC =="Ozone", "Measurement"]))
+        
+        plot(comb_data[comb_data$AQS_PARAMETER_DESC =="Sulfur dioxide", "mean.temp"], 
+             comb_data[comb_data$AQS_PARAMETER_DESC =="Sulfur dioxide", "Measurement"],
+             xlab = "Mean Temp. (F)", ylab = "Sulfur Dioxide (ppm)")
+        title("Sulfur Dioxide vs. Mean Temp. (1990 - 2017)")
+        abline(lm(comb_data[comb_data$AQS_PARAMETER_DESC =="Sulfur dioxide", "Measurement"] ~
+                  comb_data[comb_data$AQS_PARAMETER_DESC =="Sulfur dioxide", "mean.temp"]), col = "red")
+        print(cor(comb_data[comb_data$AQS_PARAMETER_DESC =="Sulfur dioxide", "mean.temp"], 
+             comb_data[comb_data$AQS_PARAMETER_DESC =="Sulfur dioxide", "Measurement"]))
+     
+        
+```
+
