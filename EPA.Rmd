@@ -158,7 +158,7 @@ row.names(df)<-NULL
 	
 ```
 
-### Seasonal Variation
+### Seasonal Variation in Air Quality
 ```{r}
     pm2.5_ts <- ts(pm2.5$avg.measurement, start = c(2000, 1), end = c(2017,09),  frequency = 12)
     plot(pm2.5_ts)
@@ -230,27 +230,7 @@ Now we can plot the variables and see if they corrlate with each other.
         # print(cor(comb_data[comb_data$AQS_PARAMETER_DESC =="PM2.5 - Local Conditions", "DAILY_AQI_VALUE"], 
         #      comb_data[comb_data$AQS_PARAMETER_DESC =="PM2.5 - Local Conditions", "Measurement"]))     
         
-        
-        
-        
-        #  plot(comb_data[comb_data$AQS_PARAMETER_DESC =="Ozone", "mean.temp"], 
-        #      comb_data[comb_data$AQS_PARAMETER_DESC =="Ozone", "Measurement"],
-        #      xlab = "Mean Temp. (F)", ylab = "Ozone (ppm)")
-        # title("Ozone vs. Mean Temp. (1990 - 2017)")
-        # abline(lm(comb_data[comb_data$AQS_PARAMETER_DESC =="Ozone", "Measurement"] ~
-        #           comb_data[comb_data$AQS_PARAMETER_DESC =="Ozone", "mean.temp"]), col = "red")
-        # print(cor(comb_data[comb_data$AQS_PARAMETER_DESC =="Ozone", "mean.temp"], 
-        #      comb_data[comb_data$AQS_PARAMETER_DESC =="Ozone", "Measurement"]))
-        # 
-        # plot(comb_data[comb_data$AQS_PARAMETER_DESC =="Sulfur dioxide", "mean.temp"], 
-        #      comb_data[comb_data$AQS_PARAMETER_DESC =="Sulfur dioxide", "Measurement"],
-        #      xlab = "Mean Temp. (F)", ylab = "Sulfur Dioxide (ppm)")
-        # title("Sulfur Dioxide vs. Mean Temp. (1990 - 2017)")
-        # abline(lm(comb_data[comb_data$AQS_PARAMETER_DESC =="Sulfur dioxide", "Measurement"] ~
-        #           comb_data[comb_data$AQS_PARAMETER_DESC =="Sulfur dioxide", "mean.temp"]), col = "red")
-        # print(cor(comb_data[comb_data$AQS_PARAMETER_DESC =="Sulfur dioxide", "mean.temp"], 
-        #      comb_data[comb_data$AQS_PARAMETER_DESC =="Sulfur dioxide", "Measurement"]))
-     
+
         
 ```
 

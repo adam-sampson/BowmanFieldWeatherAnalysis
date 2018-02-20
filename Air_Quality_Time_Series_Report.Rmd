@@ -11,7 +11,7 @@ output:
 knitr::opts_chunk$set(echo = TRUE)
 
 # List of packages to load:
-packages <- c("tidyverse", "lubridate", "tibbletime", "rlang", "dygraphs", "forecast", "zoo", "xts", "stringr", "knitr", "kableExtra", "ggplot2")
+packages <- c("tidyverse", "lubridate", "tibbletime", "rlang", "dygraphs", "forecast", "zoo", "xts", "stringr", "knitr", "kableExtra", "ggplot2", "tseries")
   
 # Check to see whether any packages aren't installed on the computer and install
 new_packages <- packages[!(packages %in% installed.packages()[,"Package"])]
@@ -54,7 +54,189 @@ knitr::kable(weather_desc.df, booktabs = TRUE)
 
 ## Air Quality Data
 
-<!-- Insert discussion and chart here -->
+Particulate matter
+Fine particulate matter is a broad term used for an airborne mixture of solid particles and liquid droplets. These particles are <= 2.5 microns in diameter and, although the composition is region-specific, are largely made up of sulphate, nitrate, carbon particles and soil. Fine particles are produced from all types of combustion, including motor vehicles, power plants, residential wood burning, forest fires, agricultural burning, and some industrial processes.
+ 
+ 
+Along with ground-level ozone, fine particulate matter is one of the two major components of smog.
+ 
+From a human perspective, excess fine particulates pose hazards for people with asthma, cardiovascular or lung disease, as well as children and the elderly. These health effects have been associated with both short term (daily) and long term (>year) exposure. However, even if you are healthy, you may feel temporary symptoms if you are exposed to high levels of particle pollution. Numerous scientific studies connect particle pollution exposure to a variety of health issues, including:
+    
+*   irritation of the eyes, nose and throat
+*   coughing, chest tightness and shortness of breath
+*   reduced lung function
+*   irregular heartbeat
+*   asthma attacks
+*   heart attacks
+*   premature death in people with heart or lung disease
+
+Ecologically, fine particulate matter can damage vegetation and can lead to soil erosion.
+
+The EPA has set National Ambient Air Quality Standards for six principal pollutants found [here](https://www.epa.gov/criteria-air-pollutants/naaqs-table).
+
+Air Quality Index Table
+
+| AQ Index  | Health Concern | Meaning                                      |
+|-----------|----------------|----------------------------------------------|
+|0 to 50	|Good   | Air quality is considered satisfactory, and air pollution poses little or no risk.|
+|51 to 100 |Moderate| Air quality is acceptable; however, for some pollutants there may be a moderate health concern for a very small number of people who are unusually sensitive to air pollution.|
+|101 to 150	|Unhealthy for Sensitive Groups| Members of sensitive groups may experience health effects. The general public is not likely to be affected.|	
+|151 to 200	|Unhealthy| Everyone may begin to experience health effects; members of sensitive groups may experience more serious health effects.|
+|201 to 300	|Very Unhealthy| Health alert: everyone may experience more serious health effects.|
+|301 to 500	|Hazardous| Health warnings of emergency conditions. The entire population is more likely to be affected.|
+
+Data was aquired from the EPA [website](https://www.epa.gov/outdoor-air-quality-data/download-daily-data) there are several monitoring stations in Jefferson County.
+```{r eval=FALSE, message=FALSE, warning=FALSE, include=TRUE, paged.print=FALSE}
+#   Gather all the files in the directory
+    temp <- list.files(pattern="*.csv")
+
+#  Read in all the files and bind them together
+   EPA_data <- lapply(temp, function(x) read.csv(x, stringsAsFactors = FALSE)) %>% bind_rows()
+   
+   save(EPA_data, file = "EPA.Rdata")
+
+```
+
+### Exploratory Analysis of Air Data
+```{r echo=FALSE, message=FALSE, warning=FALSE, paged.print=FALSE}
+    
+    load("EPA_data.Rdata")
+    #EPA_data <- read_excel("EPA_data.xlsx")
+
+#   Choose two years to compare. Also, this will average the measurements accross all sites.
+
+    ozone <- EPA_data[EPA_data$AQS_PARAMETER_DESC =="Ozone", ] %>% 
+            group_by(Date) %>% 
+            summarise(avg.measurement = mean( Measurement ))
+    
+    so2 <- EPA_data[EPA_data$AQS_PARAMETER_DESC =="Sulfur dioxide", ] %>% 
+            group_by(Date) %>% 
+            summarise(avg.measurement = mean( Measurement ))
+    
+    pm2.5 <- EPA_data[EPA_data$AQS_PARAMETER_DESC =="PM2.5 - Local Conditions", ]%>% 
+            group_by(Date) %>% 
+            summarise(avg.measurement = mean( Measurement ))
+    
+    AQI <- EPA_data %>% select(Date, DAILY_AQI_VALUE) %>% 
+            group_by(Date) %>% 
+            summarise(avg.measurement = mean( DAILY_AQI_VALUE ))
+   
+    
+  
+
+    #par(mfrow = c(2, 1))
+    plot(ozone$Date , ozone$avg.measurement , pch = 20, xlim = range(ozone$Date, na.rm = TRUE), 
+         ylim = range(ozone$avg.measurement, na.rm = T), xlab = "", ylab = expression(O[3] * " (ppm)"))
+    title("Ozone 1990 - 2017")
+    # Need to figure out to plot the moveing average
+    # lines(ozone$Date ,  rollmean(ozone$avg.measurement, k = 1), type="o", pch=22, lty=2, col="blue")  
+    abline(h = 0.070, col = "red")
+    
+    plot(so2$Date , so2$avg.measurement , pch = 20, xlim = range(so2$Date, na.rm = TRUE), 
+         ylim = range(so2$avg.measurement, na.rm = T), xlab = "", ylab = expression(SO[2] * " (ppm)"))
+    title("Sulfur Dioxide 1990 - 2017")
+    abline(h = median(so2$avg.measurement, na.rm = T), col = "blue")
+    abline(h = 75, col = "red")
+    
+    #par(mfrow = c(2, 1))
+    plot(pm2.5$Date,pm2.5$avg.measurement , pch = 20, xlim = range(pm2.5$Date, na.rm = TRUE), 
+         ylim = range(pm2.5$avg.measurement, na.rm = T), xlab = "", 
+         ylab = expression(PM[2.5] * " (" * mu * g/m^3 * ")"))
+    title("PM 2.5 2000 - 2017")
+    abline(h = median(pm2.5$avg.measurement, na.rm = T), col = "blue")
+    abline(h = 12.0, col = "red") # Treshold
+    
+     plot(AQI$Date,AQI$avg.measurement , pch = 20, xlim = range(AQI$Date, na.rm = TRUE), 
+         ylim = range(AQI$avg.measurement, na.rm = T), xlab = "", 
+         ylab = "Air Quality Index ")
+    title("Air Quality Index 1990 - 2017")
+    abline(h = median(AQI$avg.measurement, na.rm = T), col = "blue")
+    abline(h = 50, col = "red")
+```
+### Seasonal Variation in Air Quality
+```{r echo=FALSE}
+    par(mfrow = c(1, 1))
+    pm2.5_ts <- ts(pm2.5$avg.measurement, start = c(2000, 1), end = c(2017,09),  frequency = 12)
+    plot(pm2.5_ts, xlab = "", ylab = expression(PM[2.5] * " (" * mu * g/m^3 * ")"))
+    title("PM 2.5 2000 - 2017")
+    
+    seasonplot(pm2.5_ts, s = 12,   main="Seasonal plot: PM 2.5",
+                year.labels=TRUE, year.labels.left=TRUE, ylab = expression(PM[2.5] * " (" * mu * g/m^3 * ")"), col=1:20, pch=1)
+    decomp_pm <- decompose(pm2.5_ts, type = "multiplicative" )
+    acf(pm2.5_ts)
+    acf(diff(pm2.5_ts, lag = 5))
+    adf.test(pm2.5_ts, alternative = "stationary")
+    plot(decomp_pm)
+```
+
+
+### Correlations with other pollutants
+In order to examine the cause of pollution we will need to look at correlation between the PM2.5 and other weather variables such as temperature, wind, and precipitation.  
+
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+    load(file = "BowmanField_Weather_daily.RData")
+#   Convert date to common format for merging
+    bf.daily.tt$DATE_TIME <- as.Date(bf.daily.tt$DATE_TIME, format = "%Y-%m-%d")
+    EPA_data$Date <- as.Date(EPA_data$Date, format = "%Y-%m-%d")
+#   AQI$Date <- as.Date(AQI$Date, format = "%Y-%m-%d")
+#   AQI_merge <- as.data.frame( left_join(AQI, bf.daily.tt, by = c("Date"="DATE_TIME")))
+#   Merge the two datasets
+    comb_data <- as.data.frame( left_join(EPA_data, bf.daily.tt, by = c("Date"="DATE_TIME")))
+```
+
+Now we can plot the variables and see if they corrlate with each other.
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+        par(mfrow = c(2, 2))
+         plot(comb_data[comb_data$AQS_PARAMETER_DESC =="PM2.5 - Local Conditions", "mean.temp"], 
+             comb_data[comb_data$AQS_PARAMETER_DESC =="PM2.5 - Local Conditions", "Measurement"],
+             xlab = "Mean Temp. (F)", ylab = expression(PM[2.5] * " (" * mu * g/m^3 * ")"))
+        title("PM 2.5 vs. Mean Temp. (1990 - 2017)")
+        abline(lm(comb_data[comb_data$AQS_PARAMETER_DESC =="PM2.5 - Local Conditions", "Measurement"] ~
+                  comb_data[comb_data$AQS_PARAMETER_DESC =="PM2.5 - Local Conditions", "mean.temp"]), col = "red")
+        # print(cor(comb_data[comb_data$AQS_PARAMETER_DESC =="PM2.5 - Local Conditions", "mean.temp"], 
+        #      comb_data[comb_data$AQS_PARAMETER_DESC =="PM2.5 - Local Conditions", "Measurement"]))
+
+
+        
+           plot(comb_data[comb_data$AQS_PARAMETER_DESC =="PM2.5 - Local Conditions", "mean.spd"], 
+             comb_data[comb_data$AQS_PARAMETER_DESC =="PM2.5 - Local Conditions", "Measurement"],
+             xlab = "Mean Wind Speed", ylab = expression(PM[2.5] * " (" * mu * g/m^3 * ")"))
+        title("PM 2.5 vs. Mean Wind Speed (1990 - 2017)")
+        abline(lm(comb_data[comb_data$AQS_PARAMETER_DESC =="PM2.5 - Local Conditions", "Measurement"] ~
+                  comb_data[comb_data$AQS_PARAMETER_DESC =="PM2.5 - Local Conditions", "mean.spd"]), col = "red")
+        # print(cor(comb_data[comb_data$AQS_PARAMETER_DESC =="PM2.5 - Local Conditions", "mean.spd"], 
+        #      comb_data[comb_data$AQS_PARAMETER_DESC =="PM2.5 - Local Conditions", "Measurement"]))
+                
+        
+          plot(comb_data[comb_data$AQS_PARAMETER_DESC =="PM2.5 - Local Conditions", "sum.precip"], 
+             comb_data[comb_data$AQS_PARAMETER_DESC =="PM2.5 - Local Conditions", "Measurement"],
+             xlab = "Precipitation (Inches)", ylab = expression(PM[2.5] * " (" * mu * g/m^3 * ")"))
+        title("PM 2.5 vs. Precipitation (1990 - 2017)")
+        abline(lm(comb_data[comb_data$AQS_PARAMETER_DESC =="PM2.5 - Local Conditions", "Measurement"] ~
+                  comb_data[comb_data$AQS_PARAMETER_DESC =="PM2.5 - Local Conditions", "sum.precip"]), col = "red")
+        # print(cor(comb_data[comb_data$AQS_PARAMETER_DESC =="PM2.5 - Local Conditions", "sum.precip"], 
+        #      comb_data[comb_data$AQS_PARAMETER_DESC =="PM2.5 - Local Conditions", "Measurement"]))
+        
+        
+        plot(comb_data[comb_data$AQS_PARAMETER_DESC =="PM2.5 - Local Conditions", "DAILY_AQI_VALUE"], 
+             comb_data[comb_data$AQS_PARAMETER_DESC =="PM2.5 - Local Conditions", "Measurement"],
+             xlab = "Air Quality Index", ylab = expression(PM[2.5] * " (" * mu * g/m^3 * ")"))
+        title("PM 2.5 vs. AQI (1990 - 2017)")
+        abline(lm(comb_data[comb_data$AQS_PARAMETER_DESC =="PM2.5 - Local Conditions", "Measurement"] ~
+                  comb_data[comb_data$AQS_PARAMETER_DESC =="PM2.5 - Local Conditions", "DAILY_AQI_VALUE"]), col = "red")
+        # print(cor(comb_data[comb_data$AQS_PARAMETER_DESC =="PM2.5 - Local Conditions", "DAILY_AQI_VALUE"], 
+        #      comb_data[comb_data$AQS_PARAMETER_DESC =="PM2.5 - Local Conditions", "Measurement"]))     
+        
+
+        
+```
+
+As shown above, there is a slight correlation between PM 2.5 and mean temperature. It shows a slight increase in PM 2.5 as the mean temperature increases.  Another interesting relationship can be observed by plotting PM 2.5 vs. Mean Wind Speed –we can observe that the PM 2.5 levels actually drop as the Mean wind speed increases. This is counter-intuitive because one would think that higher winds would cause PM 2.5 levels to spike. This phenomenon can actually be explained, since, we are in the valley and all the pollution gets trapped in the valley, higher wind speeds are attributed to weather changes such as weather fronts that push out air from the valley - hence the lover readings. 
+
+Increase in precipitation shows a similar relationship as with the wind speed. This phenomenon also makes sense as an increase in precipitation allows fine particulates to bind to rain droplets and fall to the ground. 
+
+The obvious relationship is an increase in an Air Quality Index also proportionately increases PM 2.5 levels. Note – PM 2.5 levels are used in calculating AQI. 
 
 # **Techniques**
 
