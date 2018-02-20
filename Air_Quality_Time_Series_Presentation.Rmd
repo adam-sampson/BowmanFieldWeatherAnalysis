@@ -1,0 +1,11 @@
+---
+title: "Air Quality Time Series Presentation"
+author: "Adam Sampson, Jay Bektasevic, Brenden McGale, Andrew Brill, Taylor Maxson"
+date: "February 20, 2018"
+output: ioslides_presentation
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+
