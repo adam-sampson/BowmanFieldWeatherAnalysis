@@ -8,8 +8,11 @@ output:
 ---
 
 ```{r setup, include=FALSE, echo=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
-
+knitr::opts_chunk$set(
+	echo = TRUE,
+	message = FALSE,
+	warning = FALSE
+)
 # List of packages to load:
 packages <- c("tidyverse", "lubridate", "tibbletime", "rlang", "dygraphs", "forecast", "zoo", "xts", "stringr", "knitr", "kableExtra", "ggplot2", "tseries")
   
@@ -54,8 +57,7 @@ knitr::kable(weather_desc.df, booktabs = TRUE)
 
 ## Air Quality Data
 
-Particulate matter
-Fine particulate matter is a broad term used for an airborne mixture of solid particles and liquid droplets. These particles are <= 2.5 microns in diameter and, although the composition is region-specific, are largely made up of sulphate, nitrate, carbon particles and soil. Fine particles are produced from all types of combustion, including motor vehicles, power plants, residential wood burning, forest fires, agricultural burning, and some industrial processes.
+Particulate matter (PM~2.5~) is a broad term used for an airborne mixture of solid particles and liquid droplets. These particles are <= 2.5 microns in diameter and, although the composition is region-specific, are largely made up of sulphate, nitrate, carbon particles and soil. Fine particles are produced from all types of combustion, including motor vehicles, power plants, residential wood burning, forest fires, agricultural burning, and some industrial processes.
  
  
 Along with ground-level ozone, fine particulate matter is one of the two major components of smog.
@@ -72,7 +74,7 @@ From a human perspective, excess fine particulates pose hazards for people with 
 
 Ecologically, fine particulate matter can damage vegetation and can lead to soil erosion.
 
-The EPA has set National Ambient Air Quality Standards for six principal pollutants found [here](https://www.epa.gov/criteria-air-pollutants/naaqs-table).
+The EPA has set a National Ambient Air Quality Standards for six principal pollutants found [here](https://www.epa.gov/criteria-air-pollutants/naaqs-table).
 
 Air Quality Index Table
 
@@ -86,7 +88,7 @@ Air Quality Index Table
 |301 to 500	|Hazardous| Health warnings of emergency conditions. The entire population is more likely to be affected.|
 
 Data was aquired from the EPA [website](https://www.epa.gov/outdoor-air-quality-data/download-daily-data) there are several monitoring stations in Jefferson County.
-```{r eval=FALSE, message=FALSE, warning=FALSE, include=TRUE, paged.print=FALSE}
+```{r eval=FALSE, message=FALSE, warning=FALSE, include=FALSE, paged.print=FALSE}
 #   Gather all the files in the directory
     temp <- list.files(pattern="*.csv")
 
@@ -148,7 +150,7 @@ Data was aquired from the EPA [website](https://www.epa.gov/outdoor-air-quality-
     lines( ozone$Date  ,  ozone$ozone_60 , type="l", pch=50, lty=2, col="blue")  
     abline(h = 0.070, col = "red")
     legend("topright", legend=c("EPA guideline ", "Moving Average 60 days"),
-       col=c("red", "blue"), lty=1:2, cex=0.8,
+       col=c("red", "blue"), lty=1:1, cex=0.8,
        box.lty=0)
     
     plot(so2$Date , so2$avg.measurement ,  xlim = range(so2$Date, na.rm = TRUE), 
@@ -156,7 +158,7 @@ Data was aquired from the EPA [website](https://www.epa.gov/outdoor-air-quality-
     title("Sulfur Dioxide (1990 - 2017)")
      lines( so2$Date  ,  so2$so2_60 , type="l", pch=50, lty=2, col="blue")
      legend("topright", legend=c("EPA guideline ", "Moving Average 60 days"),
-       col=c("red", "blue"), lty=1:2, cex=0.8,
+       col=c("red", "blue"), lty=1:1, cex=0.8,
        box.lty=0)
     abline(h = 75, col = "red")
     
@@ -167,7 +169,7 @@ Data was aquired from the EPA [website](https://www.epa.gov/outdoor-air-quality-
     title(expression(PM[2.5] * " (2000 - 2017)"))
      lines( pm2.5$Date  ,  pm2.5$pm2.5_60 , type="l", pch=50, lty=2, col="blue")
      legend("topright", legend=c("EPA guideline ", "Moving Average 60 days"),
-       col=c("red", "blue"), lty=1:2, cex=0.8,
+       col=c("red", "blue"), lty=1:1, cex=0.8,
        box.lty=0)
     abline(h = 12.0, col = "red") 
     
@@ -177,7 +179,7 @@ Data was aquired from the EPA [website](https://www.epa.gov/outdoor-air-quality-
     title("Air Quality Index (1990 - 2017)")
         lines( AQI$Date  ,  AQI$AQI_60 , type="l", pch=50, lty=2, col="blue")
      legend("topright", legend=c("EPA guideline ", "Moving Average 60 days"),
-       col=c("red", "blue"), lty=1:2, cex=0.8,
+       col=c("red", "blue"), lty=1:1, cex=0.8,
        box.lty=0)
     abline(h = 50, col = "red")
 ```
@@ -197,11 +199,14 @@ Data was aquired from the EPA [website](https://www.epa.gov/outdoor-air-quality-
     acf(diff(pm2.5_ts, lag = 5))
     adf.test(pm2.5_ts, alternative = "stationary")
     plot(decomp_pm)
+ 
 ```
 
 
+
+
 ### Correlations with other pollutants
-In order to examine the cause of pollution we will need to look at correlation between the PM2.5 and other weather variables such as temperature, wind, and precipitation.  
+In order to examine the cause of pollution we will need to look at correlation between the PM~2.5~ and other weather variables such as temperature, wind, and precipitation.  
 
 
 ```{r echo=FALSE, message=FALSE, warning=FALSE}
@@ -232,7 +237,7 @@ Now we can plot the variables and see if they corrlate with each other.
            plot(comb_data[comb_data$AQS_PARAMETER_DESC =="PM2.5 - Local Conditions", "mean.spd"], 
              comb_data[comb_data$AQS_PARAMETER_DESC =="PM2.5 - Local Conditions", "Measurement"],
              xlab = "Mean Wind Speed", ylab = expression(PM[2.5] * " (" * mu * g/m^3 * ")"))
-        title(expression(PM[2.5] * " vs. Mean Wind Speed (1990 - 2017)"))
+        title(expression(PM[2.5] * " vs. Mean Wind Spd. (1990 - 2017)"))
         abline(lm(comb_data[comb_data$AQS_PARAMETER_DESC =="PM2.5 - Local Conditions", "Measurement"] ~
                   comb_data[comb_data$AQS_PARAMETER_DESC =="PM2.5 - Local Conditions", "mean.spd"]), col = "red")
         # print(cor(comb_data[comb_data$AQS_PARAMETER_DESC =="PM2.5 - Local Conditions", "mean.spd"], 
@@ -262,11 +267,27 @@ Now we can plot the variables and see if they corrlate with each other.
         
 ```
 
-As shown above, there is a slight correlation between PM[2.5] and mean temperature. It shows a slight increase in PM 2.5 as the mean temperature increases.  Another interesting relationship can be observed by plotting PM 2.5 vs. Mean Wind Speed –we can observe that the PM 2.5 levels actually drop as the Mean wind speed increases. This is counter-intuitive because one would think that higher winds would cause PM 2.5 levels to spike. This phenomenon can actually be explained, since, we are in the valley and all the pollution gets trapped in the valley, higher wind speeds are attributed to weather changes such as weather fronts that push out air from the valley - hence the lover readings. 
+As shown above, there is a slight correlation between PM~2.5~ and mean temperature. It shows a slight increase in PM~2.5~ as the mean temperature increases.  Another interesting relationship can be observed by plotting PM~2.5~ vs. Mean Wind Speed –we can observe that the PM~2.5~ levels actually drop as the Mean wind speed increases. This is counter-intuitive because one would think that higher winds would cause PM~2.5~ levels to spike. This phenomenon can actually be explained, since, we are in the valley and all the pollution gets trapped in the valley, higher wind speeds are attributed to weather changes such as weather fronts that push out air from the valley - hence the lover readings. 
 
 Increase in precipitation shows a similar relationship as with the wind speed. This phenomenon also makes sense as an increase in precipitation allows fine particulates to bind to rain droplets and fall to the ground. 
 
-The obvious relationship is an increase in an Air Quality Index also proportionately increases PM 2.5 levels. Note – PM 2.5 levels are used in calculating AQI. 
+The obvious relationship is an increase in an Air Quality Index also proportionately increases PM~2.5~ levels. Note – PM~2.5~ levels are used in calculating AQI. 
+
+### PM~2.5~ Forecast 
+
+Now that we know that the time series is a stationary we can go ahead and forecast PM~2.5~ levels 12 months in the future. I will use Holt-Winters model as it does a great job of picking up seasonality and the trend.
+```{r echo=FALSE, message=FALSE, warning=FALSE, paged.print=FALSE}
+   
+    pm2.5_forecast <- HoltWinters(pm2.5_ts)
+    summary(forecast(pm2.5_forecast,12))
+   
+    plot(forecast(pm2.5_forecast,12),  xlab="", ylab=expression(PM[2.5] * " (" * mu * g/m^3 * ")"), 
+         main= expression(PM[2.5] * " Forecast (12 months)"), pch=25)
+    abline(h = 12.0, col = "red") 
+    legend("topleft", legend=c("Actual", "Forecast", "EPA guideline"),
+       col=c("black", "blue", "red"), lty=1:1, cex=0.8,
+       box.lty=0)
+```
 
 # **Techniques**
 
