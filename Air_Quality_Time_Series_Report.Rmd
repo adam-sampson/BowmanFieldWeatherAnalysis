@@ -91,7 +91,8 @@ Data was aquired from the EPA [website](https://www.epa.gov/outdoor-air-quality-
     temp <- list.files(pattern="*.csv")
 
 #  Read in all the files and bind them together
-   EPA_data <- lapply(temp, function(x) read.csv(x, stringsAsFactors = FALSE)) %>% bind_rows()
+   EPA_data <- lapply(temp, function(x) read.csv(x, stringsAsFactors = FALSE)) %>% 
+               bind_rows()
    
    save(EPA_data, file = "EPA.Rdata")
 
@@ -124,12 +125,12 @@ Data was aquired from the EPA [website](https://www.epa.gov/outdoor-air-quality-
     
   
 
-    #par(mfrow = c(2, 1))
-    plot(ozone$Date , ozone$avg.measurement , pch = 20, xlim = range(ozone$Date, na.rm = TRUE), 
+    par(mfrow = c(2, 1))
+    plot(ozone$Date , ozone$avg.measurement , type = "p", pch = 20, xlim = range(ozone$Date, na.rm = TRUE), 
          ylim = range(ozone$avg.measurement, na.rm = T), xlab = "", ylab = expression(O[3] * " (ppm)"))
     title("Ozone 1990 - 2017")
     # Need to figure out to plot the moveing average
-    # lines(ozone$Date ,  rollmean(ozone$avg.measurement, k = 1), type="o", pch=22, lty=2, col="blue")  
+    #lines(as.vector( ozone[1:(nrow(ozone) - 2) ,"Date"] ) ,  rollmean(ozone$avg.measurement, k = 2), type="o", pch=22, lty=2, col="blue")  
     abline(h = 0.070, col = "red")
     
     plot(so2$Date , so2$avg.measurement , pch = 20, xlim = range(so2$Date, na.rm = TRUE), 
@@ -138,7 +139,7 @@ Data was aquired from the EPA [website](https://www.epa.gov/outdoor-air-quality-
     abline(h = median(so2$avg.measurement, na.rm = T), col = "blue")
     abline(h = 75, col = "red")
     
-    #par(mfrow = c(2, 1))
+    par(mfrow = c(2, 1))
     plot(pm2.5$Date,pm2.5$avg.measurement , pch = 20, xlim = range(pm2.5$Date, na.rm = TRUE), 
          ylim = range(pm2.5$avg.measurement, na.rm = T), xlab = "", 
          ylab = expression(PM[2.5] * " (" * mu * g/m^3 * ")"))
@@ -154,14 +155,16 @@ Data was aquired from the EPA [website](https://www.epa.gov/outdoor-air-quality-
     abline(h = 50, col = "red")
 ```
 ### Seasonal Variation in Air Quality
-```{r echo=FALSE}
-    par(mfrow = c(1, 1))
+```{r  fig.align='center' ,echo=FALSE}
+    par(mfrow = c(2, 1))
     pm2.5_ts <- ts(pm2.5$avg.measurement, start = c(2000, 1), end = c(2017,09),  frequency = 12)
-    plot(pm2.5_ts, xlab = "", ylab = expression(PM[2.5] * " (" * mu * g/m^3 * ")"))
+    plot(pm2.5_ts,  ylab = expression(PM[2.5] * " (" * mu * g/m^3 * ")"))
     title("PM 2.5 2000 - 2017")
     
     seasonplot(pm2.5_ts, s = 12,   main="Seasonal plot: PM 2.5",
                 year.labels=TRUE, year.labels.left=TRUE, ylab = expression(PM[2.5] * " (" * mu * g/m^3 * ")"), col=1:20, pch=1)
+    
+    par(mfrow = c(1,1))
     decomp_pm <- decompose(pm2.5_ts, type = "multiplicative" )
     acf(pm2.5_ts)
     acf(diff(pm2.5_ts, lag = 5))
@@ -186,7 +189,7 @@ In order to examine the cause of pollution we will need to look at correlation b
 ```
 
 Now we can plot the variables and see if they corrlate with each other.
-```{r echo=FALSE, message=FALSE, warning=FALSE}
+```{r echo=FALSE, message=FALSE, warning=FALSE, fig.align='center'}
         par(mfrow = c(2, 2))
          plot(comb_data[comb_data$AQS_PARAMETER_DESC =="PM2.5 - Local Conditions", "mean.temp"], 
              comb_data[comb_data$AQS_PARAMETER_DESC =="PM2.5 - Local Conditions", "Measurement"],
