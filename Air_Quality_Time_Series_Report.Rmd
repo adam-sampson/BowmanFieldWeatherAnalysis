@@ -138,39 +138,42 @@ Data was aquired from the EPA [website](https://www.epa.gov/outdoor-air-quality-
                    AQI_30 = rollmean(avg.measurement, k = 30, fill = NA),
                    AQI_60 = rollmean(avg.measurement, k = 60, fill = NA)
             )
-   
     
-  
 
-    #par(mfrow = c(2, 1))
-    plot(ozone$Date , ozone$avg.measurement , type = "p", xlim = range(ozone$Date, na.rm = TRUE), 
+```
+
+```{r echo=FALSE, fig.align='center', message=FALSE, warning=FALSE, paged.print=FALSE}
+
+
+    par(mfcol = c(2, 2)  )
+    plot(ozone$Date , ozone$avg.measurement ,  xlim = range(ozone$Date, na.rm = TRUE), 
          ylim = range(ozone$avg.measurement, na.rm = T), xlab = "", ylab = expression(O[3] * " (ppm)"))
     title("Ozone (1990 - 2017)")
     # Need to figure out to plot the moveing average
     lines( ozone$Date  ,  ozone$ozone_60 , type="l", pch=50, lty=2, col="blue")  
     abline(h = 0.070, col = "red")
-    legend("topright", legend=c("EPA guideline ", "Moving Average 60 days"),
-       col=c("red", "blue"), lty=1:1, cex=0.8,
-       box.lty=0)
+    # legend("topright", legend=c("EPA guideline ", "MA 60 days"),
+    #    col=c("red", "blue"), lty=1:1, cex=0.8,
+    #    box.lty=0)
     
     plot(so2$Date , so2$avg.measurement ,  xlim = range(so2$Date, na.rm = TRUE), 
          ylim = range(so2$avg.measurement, na.rm = T), xlab = "", ylab = expression(SO[2] * " (ppm)"))
     title("Sulfur Dioxide (1990 - 2017)")
      lines( so2$Date  ,  so2$so2_60 , type="l", pch=50, lty=2, col="blue")
-     legend("topright", legend=c("EPA guideline ", "Moving Average 60 days"),
-       col=c("red", "blue"), lty=1:1, cex=0.8,
-       box.lty=0)
+      # legend("topright", legend=c("EPA guideline ", "MA 60 days"),
+      #   col=c("red", "blue"), lty=1:1, cex=0.8,
+      #   box.lty=0)
     abline(h = 75, col = "red")
     
-    #par(mfrow = c(2, 1))
+    #par(mfrow = c(1,2))
     plot(pm2.5$Date,pm2.5$avg.measurement , xlim = range(pm2.5$Date, na.rm = TRUE), 
          ylim = range(pm2.5$avg.measurement, na.rm = T), xlab = "", 
          ylab = expression(PM[2.5] * " (" * mu * g/m^3 * ")"))
     title(expression(PM[2.5] * " (2000 - 2017)"))
      lines( pm2.5$Date  ,  pm2.5$pm2.5_60 , type="l", pch=50, lty=2, col="blue")
-     legend("topright", legend=c("EPA guideline ", "Moving Average 60 days"),
-       col=c("red", "blue"), lty=1:1, cex=0.8,
-       box.lty=0)
+     legend("topright", legend=c("EPA guideline ", "MA 60 days"),
+        col=c("red", "blue"), lty=1:1, cex=0.8,
+        box.lty=0)
     abline(h = 12.0, col = "red") 
     
      plot(AQI$Date,AQI$avg.measurement ,  xlim = range(AQI$Date, na.rm = TRUE), 
@@ -178,14 +181,15 @@ Data was aquired from the EPA [website](https://www.epa.gov/outdoor-air-quality-
          ylab = "Air Quality Index ")
     title("Air Quality Index (1990 - 2017)")
         lines( AQI$Date  ,  AQI$AQI_60 , type="l", pch=50, lty=2, col="blue")
-     legend("topright", legend=c("EPA guideline ", "Moving Average 60 days"),
-       col=c("red", "blue"), lty=1:1, cex=0.8,
-       box.lty=0)
+     # legend("topright", legend=c("EPA guideline ", "MA 60 days"),
+     #   col=c("red", "blue"), lty=1:1, cex=0.8,
+     #   box.lty=0)
     abline(h = 50, col = "red")
 ```
+
 ### Seasonal Variation in Air Quality
 ```{r  fig.align='center' ,echo=FALSE}
-    #par(mfrow = c(2, 1))
+    par(mfrow = c(2, 1))
     pm2.5_ts <- ts(pm2.5$avg.measurement, start = c(2000, 1), end = c(2017,09),  frequency = 12)
     plot(pm2.5_ts,  ylab = expression(PM[2.5] * " (" * mu * g/m^3 * ")"))
     title("PM 2.5 2000 - 2017")
@@ -193,7 +197,7 @@ Data was aquired from the EPA [website](https://www.epa.gov/outdoor-air-quality-
     seasonplot(pm2.5_ts, s = 12,   main=expression(PM[2.5] * " Seasonal Plot"),
                 year.labels=TRUE, year.labels.left=FALSE, ylab = expression(PM[2.5] * " (" * mu * g/m^3 * ")"), xlab = "", col=1:20, pch=1)
     
-    par(mfrow = c(1,1))
+    par(mfrow = c(2,1))
     decomp_pm <- decompose(pm2.5_ts, type = "multiplicative" )
     acf(pm2.5_ts)
     acf(diff(pm2.5_ts, lag = 5))
@@ -202,7 +206,7 @@ Data was aquired from the EPA [website](https://www.epa.gov/outdoor-air-quality-
  
 ```
 
-
+For a stationary time series, the ACF will drop to zero relatively quickly, while the ACF of non-stationary data decreases slowly.
 
 
 ### Correlations with other pollutants
@@ -280,7 +284,7 @@ Now that we know that the time series is a stationary we can go ahead and foreca
    
     pm2.5_forecast <- HoltWinters(pm2.5_ts)
     summary(forecast(pm2.5_forecast,12))
-   
+   checkresiduals(pm2.5_forecast)
     plot(forecast(pm2.5_forecast,12),  xlab="", ylab=expression(PM[2.5] * " (" * mu * g/m^3 * ")"), 
          main= expression(PM[2.5] * " Forecast (12 months)"), pch=25)
     abline(h = 12.0, col = "red") 
@@ -288,6 +292,8 @@ Now that we know that the time series is a stationary we can go ahead and foreca
        col=c("black", "blue", "red"), lty=1:1, cex=0.8,
        box.lty=0)
 ```
+
+Even though the short-term forecast looks reasonable, this is a very crude model for a complex process. The residuals demonstrate that there is a lot of information that has not been captured with this model.
 
 # **Techniques**
 
