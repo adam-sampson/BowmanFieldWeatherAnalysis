@@ -108,61 +108,88 @@ Data was aquired from the EPA [website](https://www.epa.gov/outdoor-air-quality-
 
     ozone <- EPA_data[EPA_data$AQS_PARAMETER_DESC =="Ozone", ] %>% 
             group_by(Date) %>% 
-            summarise(avg.measurement = mean( Measurement ))
-    
+            summarise(avg.measurement = mean( Measurement )) %>% 
+            mutate(ozone_7 = rollmean(avg.measurement, k = 7, fill = NA),
+                   ozone_30 = rollmean(avg.measurement, k = 30, fill = NA),
+                   ozone_60 = rollmean(avg.measurement, k = 60, fill = NA)
+                   )                   
     so2 <- EPA_data[EPA_data$AQS_PARAMETER_DESC =="Sulfur dioxide", ] %>% 
             group_by(Date) %>% 
-            summarise(avg.measurement = mean( Measurement ))
+            summarise(avg.measurement = mean( Measurement )) %>% 
+            mutate(so2_7 = rollmean(avg.measurement, k = 7, fill = NA),
+                   so2_30 = rollmean(avg.measurement, k = 30, fill = NA),
+                   so2_60 = rollmean(avg.measurement, k = 60, fill = NA)
+            )
     
     pm2.5 <- EPA_data[EPA_data$AQS_PARAMETER_DESC =="PM2.5 - Local Conditions", ]%>% 
             group_by(Date) %>% 
-            summarise(avg.measurement = mean( Measurement ))
+            summarise(avg.measurement = mean( Measurement )) %>% 
+            mutate(pm2.5_7 = rollmean(avg.measurement, k = 7, fill = NA),
+                   pm2.5_30 = rollmean(avg.measurement, k = 30, fill = NA),
+                   pm2.5_60 = rollmean(avg.measurement, k = 60, fill = NA)
+            )
     
     AQI <- EPA_data %>% select(Date, DAILY_AQI_VALUE) %>% 
             group_by(Date) %>% 
-            summarise(avg.measurement = mean( DAILY_AQI_VALUE ))
+            summarise(avg.measurement = mean( DAILY_AQI_VALUE )) %>% 
+            mutate(AQI_7 = rollmean(avg.measurement, k = 7, fill = NA),
+                   AQI_30 = rollmean(avg.measurement, k = 30, fill = NA),
+                   AQI_60 = rollmean(avg.measurement, k = 60, fill = NA)
+            )
    
     
   
 
-    par(mfrow = c(2, 1))
-    plot(ozone$Date , ozone$avg.measurement , type = "p", pch = 20, xlim = range(ozone$Date, na.rm = TRUE), 
+    #par(mfrow = c(2, 1))
+    plot(ozone$Date , ozone$avg.measurement , type = "p", xlim = range(ozone$Date, na.rm = TRUE), 
          ylim = range(ozone$avg.measurement, na.rm = T), xlab = "", ylab = expression(O[3] * " (ppm)"))
-    title("Ozone 1990 - 2017")
+    title("Ozone (1990 - 2017)")
     # Need to figure out to plot the moveing average
-    #lines(as.vector( ozone[1:(nrow(ozone) - 2) ,"Date"] ) ,  rollmean(ozone$avg.measurement, k = 2), type="o", pch=22, lty=2, col="blue")  
+    lines( ozone$Date  ,  ozone$ozone_60 , type="l", pch=50, lty=2, col="blue")  
     abline(h = 0.070, col = "red")
+    legend("topright", legend=c("EPA guideline ", "Moving Average 60 days"),
+       col=c("red", "blue"), lty=1:2, cex=0.8,
+       box.lty=0)
     
-    plot(so2$Date , so2$avg.measurement , pch = 20, xlim = range(so2$Date, na.rm = TRUE), 
+    plot(so2$Date , so2$avg.measurement ,  xlim = range(so2$Date, na.rm = TRUE), 
          ylim = range(so2$avg.measurement, na.rm = T), xlab = "", ylab = expression(SO[2] * " (ppm)"))
-    title("Sulfur Dioxide 1990 - 2017")
-    abline(h = median(so2$avg.measurement, na.rm = T), col = "blue")
+    title("Sulfur Dioxide (1990 - 2017)")
+     lines( so2$Date  ,  so2$so2_60 , type="l", pch=50, lty=2, col="blue")
+     legend("topright", legend=c("EPA guideline ", "Moving Average 60 days"),
+       col=c("red", "blue"), lty=1:2, cex=0.8,
+       box.lty=0)
     abline(h = 75, col = "red")
     
-    par(mfrow = c(2, 1))
-    plot(pm2.5$Date,pm2.5$avg.measurement , pch = 20, xlim = range(pm2.5$Date, na.rm = TRUE), 
+    #par(mfrow = c(2, 1))
+    plot(pm2.5$Date,pm2.5$avg.measurement , xlim = range(pm2.5$Date, na.rm = TRUE), 
          ylim = range(pm2.5$avg.measurement, na.rm = T), xlab = "", 
          ylab = expression(PM[2.5] * " (" * mu * g/m^3 * ")"))
-    title("PM 2.5 2000 - 2017")
-    abline(h = median(pm2.5$avg.measurement, na.rm = T), col = "blue")
-    abline(h = 12.0, col = "red") # Treshold
+    title(expression(PM[2.5] * " (2000 - 2017)"))
+     lines( pm2.5$Date  ,  pm2.5$pm2.5_60 , type="l", pch=50, lty=2, col="blue")
+     legend("topright", legend=c("EPA guideline ", "Moving Average 60 days"),
+       col=c("red", "blue"), lty=1:2, cex=0.8,
+       box.lty=0)
+    abline(h = 12.0, col = "red") 
     
-     plot(AQI$Date,AQI$avg.measurement , pch = 20, xlim = range(AQI$Date, na.rm = TRUE), 
+     plot(AQI$Date,AQI$avg.measurement ,  xlim = range(AQI$Date, na.rm = TRUE), 
          ylim = range(AQI$avg.measurement, na.rm = T), xlab = "", 
          ylab = "Air Quality Index ")
-    title("Air Quality Index 1990 - 2017")
-    abline(h = median(AQI$avg.measurement, na.rm = T), col = "blue")
+    title("Air Quality Index (1990 - 2017)")
+        lines( AQI$Date  ,  AQI$AQI_60 , type="l", pch=50, lty=2, col="blue")
+     legend("topright", legend=c("EPA guideline ", "Moving Average 60 days"),
+       col=c("red", "blue"), lty=1:2, cex=0.8,
+       box.lty=0)
     abline(h = 50, col = "red")
 ```
 ### Seasonal Variation in Air Quality
 ```{r  fig.align='center' ,echo=FALSE}
-    par(mfrow = c(2, 1))
+    #par(mfrow = c(2, 1))
     pm2.5_ts <- ts(pm2.5$avg.measurement, start = c(2000, 1), end = c(2017,09),  frequency = 12)
     plot(pm2.5_ts,  ylab = expression(PM[2.5] * " (" * mu * g/m^3 * ")"))
     title("PM 2.5 2000 - 2017")
     
-    seasonplot(pm2.5_ts, s = 12,   main="Seasonal plot: PM 2.5",
-                year.labels=TRUE, year.labels.left=TRUE, ylab = expression(PM[2.5] * " (" * mu * g/m^3 * ")"), col=1:20, pch=1)
+    seasonplot(pm2.5_ts, s = 12,   main=expression(PM[2.5] * " Seasonal Plot"),
+                year.labels=TRUE, year.labels.left=FALSE, ylab = expression(PM[2.5] * " (" * mu * g/m^3 * ")"), xlab = "", col=1:20, pch=1)
     
     par(mfrow = c(1,1))
     decomp_pm <- decompose(pm2.5_ts, type = "multiplicative" )
@@ -194,7 +221,7 @@ Now we can plot the variables and see if they corrlate with each other.
          plot(comb_data[comb_data$AQS_PARAMETER_DESC =="PM2.5 - Local Conditions", "mean.temp"], 
              comb_data[comb_data$AQS_PARAMETER_DESC =="PM2.5 - Local Conditions", "Measurement"],
              xlab = "Mean Temp. (F)", ylab = expression(PM[2.5] * " (" * mu * g/m^3 * ")"))
-        title("PM 2.5 vs. Mean Temp. (1990 - 2017)")
+        title(expression(PM[2.5] * " vs. Mean Temp. (1990 - 2017)"))
         abline(lm(comb_data[comb_data$AQS_PARAMETER_DESC =="PM2.5 - Local Conditions", "Measurement"] ~
                   comb_data[comb_data$AQS_PARAMETER_DESC =="PM2.5 - Local Conditions", "mean.temp"]), col = "red")
         # print(cor(comb_data[comb_data$AQS_PARAMETER_DESC =="PM2.5 - Local Conditions", "mean.temp"], 
@@ -205,7 +232,7 @@ Now we can plot the variables and see if they corrlate with each other.
            plot(comb_data[comb_data$AQS_PARAMETER_DESC =="PM2.5 - Local Conditions", "mean.spd"], 
              comb_data[comb_data$AQS_PARAMETER_DESC =="PM2.5 - Local Conditions", "Measurement"],
              xlab = "Mean Wind Speed", ylab = expression(PM[2.5] * " (" * mu * g/m^3 * ")"))
-        title("PM 2.5 vs. Mean Wind Speed (1990 - 2017)")
+        title(expression(PM[2.5] * " vs. Mean Wind Speed (1990 - 2017)"))
         abline(lm(comb_data[comb_data$AQS_PARAMETER_DESC =="PM2.5 - Local Conditions", "Measurement"] ~
                   comb_data[comb_data$AQS_PARAMETER_DESC =="PM2.5 - Local Conditions", "mean.spd"]), col = "red")
         # print(cor(comb_data[comb_data$AQS_PARAMETER_DESC =="PM2.5 - Local Conditions", "mean.spd"], 
@@ -215,7 +242,7 @@ Now we can plot the variables and see if they corrlate with each other.
           plot(comb_data[comb_data$AQS_PARAMETER_DESC =="PM2.5 - Local Conditions", "sum.precip"], 
              comb_data[comb_data$AQS_PARAMETER_DESC =="PM2.5 - Local Conditions", "Measurement"],
              xlab = "Precipitation (Inches)", ylab = expression(PM[2.5] * " (" * mu * g/m^3 * ")"))
-        title("PM 2.5 vs. Precipitation (1990 - 2017)")
+        title(expression(PM[2.5] * " vs. Precipitation (1990 - 2017)"))
         abline(lm(comb_data[comb_data$AQS_PARAMETER_DESC =="PM2.5 - Local Conditions", "Measurement"] ~
                   comb_data[comb_data$AQS_PARAMETER_DESC =="PM2.5 - Local Conditions", "sum.precip"]), col = "red")
         # print(cor(comb_data[comb_data$AQS_PARAMETER_DESC =="PM2.5 - Local Conditions", "sum.precip"], 
@@ -225,7 +252,7 @@ Now we can plot the variables and see if they corrlate with each other.
         plot(comb_data[comb_data$AQS_PARAMETER_DESC =="PM2.5 - Local Conditions", "DAILY_AQI_VALUE"], 
              comb_data[comb_data$AQS_PARAMETER_DESC =="PM2.5 - Local Conditions", "Measurement"],
              xlab = "Air Quality Index", ylab = expression(PM[2.5] * " (" * mu * g/m^3 * ")"))
-        title("PM 2.5 vs. AQI (1990 - 2017)")
+        title(expression(PM[2.5] * " vs. AQI (1990 - 2017)"))
         abline(lm(comb_data[comb_data$AQS_PARAMETER_DESC =="PM2.5 - Local Conditions", "Measurement"] ~
                   comb_data[comb_data$AQS_PARAMETER_DESC =="PM2.5 - Local Conditions", "DAILY_AQI_VALUE"]), col = "red")
         # print(cor(comb_data[comb_data$AQS_PARAMETER_DESC =="PM2.5 - Local Conditions", "DAILY_AQI_VALUE"], 
@@ -235,7 +262,7 @@ Now we can plot the variables and see if they corrlate with each other.
         
 ```
 
-As shown above, there is a slight correlation between PM 2.5 and mean temperature. It shows a slight increase in PM 2.5 as the mean temperature increases.  Another interesting relationship can be observed by plotting PM 2.5 vs. Mean Wind Speed –we can observe that the PM 2.5 levels actually drop as the Mean wind speed increases. This is counter-intuitive because one would think that higher winds would cause PM 2.5 levels to spike. This phenomenon can actually be explained, since, we are in the valley and all the pollution gets trapped in the valley, higher wind speeds are attributed to weather changes such as weather fronts that push out air from the valley - hence the lover readings. 
+As shown above, there is a slight correlation between PM[2.5] and mean temperature. It shows a slight increase in PM 2.5 as the mean temperature increases.  Another interesting relationship can be observed by plotting PM 2.5 vs. Mean Wind Speed –we can observe that the PM 2.5 levels actually drop as the Mean wind speed increases. This is counter-intuitive because one would think that higher winds would cause PM 2.5 levels to spike. This phenomenon can actually be explained, since, we are in the valley and all the pollution gets trapped in the valley, higher wind speeds are attributed to weather changes such as weather fronts that push out air from the valley - hence the lover readings. 
 
 Increase in precipitation shows a similar relationship as with the wind speed. This phenomenon also makes sense as an increase in precipitation allows fine particulates to bind to rain droplets and fall to the ground. 
 
