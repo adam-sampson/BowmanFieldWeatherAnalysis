@@ -477,4 +477,14 @@ plot(precip.decomp$random)
 plot(precip.decomp$figure)
 ```
 
-# **Conclusion**
+# **Conclusions**
+
+As windspeed increases, Particulate Matter Decreases.
+
+As temperature increases, probability of high PM2.5 increases.
+
+Heavey rainfall coincides with low PM counts.
+
+Forecast model was not accurate.
+
+External factors outside of weather were not considered (such as the effects of regulation or industrial changes).
