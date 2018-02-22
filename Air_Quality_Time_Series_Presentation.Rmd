@@ -1,11 +1,365 @@
 ---
-title: "Air Quality Time Series Presentation"
+title: "Air Quality Time Series"
 author: "Adam Sampson, Jay Bektasevic, Brenden McGale, Andrew Brill, Taylor Maxson"
 date: "February 20, 2018"
-output: ioslides_presentation
+output:
+        ioslides_presentation:
+                widescreen: true
 ---
 
-```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = FALSE)
+```{r include=FALSE, echo=FALSE}
+packages <- c("tidyverse", "lubridate", "tibbletime", "rlang", "dygraphs", "forecast", "zoo", "xts", "stringr", "knitr", "kableExtra", "ggplot2", "tseries")
+  
+# Check to see whether any packages aren't installed on the computer and install
+new_packages <- packages[!(packages %in% installed.packages()[,"Package"])]
+if(length(new_packages)) install.packages(new_packages)
+  
+# Load Neccessary Packages
+sapply(packages, require, character.only = TRUE)
+rm(new_packages)
+
+load('weather_info.RData')
+weather_desc.df <- 
+  data.frame(matrix(names(weather.info$Description),
+                    nrow = 33)) %>%
+  data.frame(matrix(unlist(weather.info$Description),
+                    nrow = 33, 
+                    ncol = 1, 
+                    byrow = T)) 
+names(weather_desc.df) <- c("col_name","description")
+weather_desc.df <- weather_desc.df %>%
+  filter(col_name == "DATE_TIME"|
+           col_name == "DIR"|
+           col_name == "SPD"|
+           col_name == "TEMP"|
+           col_name == "PCP01")
+rm(weather.info)
+
+load("EPA_data.Rdata")
+    #EPA_data <- read_excel("EPA_data.xlsx")
+
+#   Choose two years to compare. Also, this will average the measurements accross all sites.
+
+    ozone <- EPA_data[EPA_data$AQS_PARAMETER_DESC =="Ozone", ] %>% 
+            group_by(Date) %>% 
+            summarise(avg.measurement = mean( Measurement )) %>% 
+            mutate(ozone_7 = rollmean(avg.measurement, k = 7, fill = NA),
+                   ozone_30 = rollmean(avg.measurement, k = 30, fill = NA),
+                   ozone_60 = rollmean(avg.measurement, k = 60, fill = NA)
+                   )                   
+    so2 <- EPA_data[EPA_data$AQS_PARAMETER_DESC =="Sulfur dioxide", ] %>% 
+            group_by(Date) %>% 
+            summarise(avg.measurement = mean( Measurement )) %>% 
+            mutate(so2_7 = rollmean(avg.measurement, k = 7, fill = NA),
+                   so2_30 = rollmean(avg.measurement, k = 30, fill = NA),
+                   so2_60 = rollmean(avg.measurement, k = 60, fill = NA)
+            )
+    
+    pm2.5 <- EPA_data[EPA_data$AQS_PARAMETER_DESC =="PM2.5 - Local Conditions", ]%>% 
+            group_by(Date) %>% 
+            summarise(avg.measurement = mean( Measurement )) %>% 
+            mutate(pm2.5_7 = rollmean(avg.measurement, k = 7, fill = NA),
+                   pm2.5_30 = rollmean(avg.measurement, k = 30, fill = NA),
+                   pm2.5_60 = rollmean(avg.measurement, k = 60, fill = NA)
+            )
+    
+    AQI <- EPA_data %>% select(Date, DAILY_AQI_VALUE) %>% 
+            group_by(Date) %>% 
+            summarise(avg.measurement = mean( DAILY_AQI_VALUE )) %>% 
+            mutate(AQI_7 = rollmean(avg.measurement, k = 7, fill = NA),
+                   AQI_30 = rollmean(avg.measurement, k = 30, fill = NA),
+                   AQI_60 = rollmean(avg.measurement, k = 60, fill = NA)
+            )
+    
+
 ```
 
+Cleaning Data
+----
+
+| Variable  | Cleanup                       |
+|-----------|-------------------------------|
+| Date_TIME | Clean                         |
+| DIR       | Any \* in field indicates NA  |
+|           | 990 - Variable - NA           |
+|           | \>360 - Uncertain - NA        |
+| SPD       | Any \* in field indicates NA  |
+| TEMP      | Any \* in field indicates NA  |
+| PCP01     | Any \* in field indicates NA  |
+
+
+Aggregate To Daily
+----
+
+The Air Quality data is in daily format. Therefore it makes sense to aggregate the weather data to daily values as well. 
+
+| Input     | Output(s)         |
+|-----------|-------------------|
+| TEMP      | min / mean / max  |  
+| x.dir     | min / mean / max  |
+| y.dir     | min / mean / max  |
+| SPD       | min / mean / max  |
+| PCP01     | sum               |
+
+
+Imputing NA values in Weather Data
+----
+| Input     | Impute Method     |
+|-----------|-------------------|
+| TEMP      | na.approx         |  
+| x.dir     | 0 if NA           |
+| y.dir     | 0 if NA           |
+| SPD       | na.approx         |
+| PCP01     | 0 if NA           |
+
+
+
+Exploring EPA Measures
+----
+
+```{r echo=FALSE, fig.width=8,fig.height=6, fig.align='center', message=FALSE, warning=FALSE}
+
+
+    par(mfcol = c(2, 2)  )
+    plot(ozone$Date , ozone$avg.measurement ,  xlim = range(ozone$Date, na.rm = TRUE), 
+         ylim = range(ozone$avg.measurement, na.rm = T), xlab = "", ylab = expression(O[3] * " (ppm)"))
+    title("Ozone (1990 - 2017)")
+    # Need to figure out to plot the moveing average
+    lines( ozone$Date  ,  ozone$ozone_60 , type="l", pch=50, lty=2, col="blue")  
+    abline(h = 0.070, col = "red")
+    # legend("topright", legend=c("EPA guideline ", "MA 60 days"),
+    #    col=c("red", "blue"), lty=1:1, cex=0.8,
+    #    box.lty=0)
+    
+    plot(so2$Date , so2$avg.measurement ,  xlim = range(so2$Date, na.rm = TRUE), 
+         ylim = range(so2$avg.measurement, na.rm = T), xlab = "", ylab = expression(SO[2] * " (ppm)"))
+    title("Sulfur Dioxide (1990 - 2017)")
+     lines( so2$Date  ,  so2$so2_60 , type="l", pch=50, lty=2, col="blue")
+      # legend("topright", legend=c("EPA guideline ", "MA 60 days"),
+      #   col=c("red", "blue"), lty=1:1, cex=0.8,
+      #   box.lty=0)
+    abline(h = 75, col = "red")
+    
+    #par(mfrow = c(1,2))
+    plot(pm2.5$Date,pm2.5$avg.measurement , xlim = range(pm2.5$Date, na.rm = TRUE), 
+         ylim = range(pm2.5$avg.measurement, na.rm = T), xlab = "", 
+         ylab = expression(PM[2.5] * " (" * mu * g/m^3 * ")"))
+    title(expression(PM[2.5] * " (2000 - 2017)"))
+     lines( pm2.5$Date  ,  pm2.5$pm2.5_60 , type="l", pch=50, lty=2, col="blue")
+     legend("topright", legend=c("EPA guideline ", "MA 60 days"),
+        col=c("red", "blue"), lty=1:1, cex=0.8,
+        box.lty=0)
+    abline(h = 12.0, col = "red") 
+    
+     plot(AQI$Date,AQI$avg.measurement ,  xlim = range(AQI$Date, na.rm = TRUE), 
+         ylim = range(AQI$avg.measurement, na.rm = T), xlab = "", 
+         ylab = "Air Quality Index ")
+    title("Air Quality Index (1990 - 2017)")
+        lines( AQI$Date  ,  AQI$AQI_60 , type="l", pch=50, lty=2, col="blue")
+     # legend("topright", legend=c("EPA guideline ", "MA 60 days"),
+     #   col=c("red", "blue"), lty=1:1, cex=0.8,
+     #   box.lty=0)
+    abline(h = 50, col = "red")
+```
+
+
+Time Series and Seasonal Plot of PM2.5 
+----
+```{r echo=FALSE, fig.width=8,fig.height=6, fig.align='center', message=FALSE, warning=FALSE}
+
+par(mfrow = c(2, 1))
+    pm2.5_ts <- ts(pm2.5$avg.measurement, start = c(2000, 1), end = c(2017,09),  frequency = 12)
+    plot(pm2.5_ts,  ylab = expression(PM[2.5] * " (" * mu * g/m^3 * ")"))
+    title("PM 2.5 2000 - 2017")
+    
+    seasonplot(pm2.5_ts, s = 12,   main=expression(PM[2.5] * " Seasonal Plot"),
+                year.labels=TRUE, year.labels.left=FALSE, ylab = expression(PM[2.5] * " (" * mu * g/m^3 * ")"), xlab = "", col=1:20, pch=1)
+```
+
+Autocorrelation Function
+----
+```{r echo=FALSE, fig.width=8,fig.height=6, fig.align='center', message=FALSE, warning=FALSE}
+    par(mfrow = c(2,1))
+    decomp_pm <- decompose(pm2.5_ts, type = "multiplicative" )
+    acf(pm2.5_ts, lag.max = 365)
+    acf(diff(pm2.5_ts, lag = 5))
+    adf.test(pm2.5_ts, alternative = "stationary")
+    plot(decomp_pm)
+
+
+
+
+```
+
+
+
+Correlations with Weather
+----
+```{r echo=FALSE, fig.width=8,fig.height=5.5, fig.align='center', message=FALSE, warning=FALSE}
+
+load(file = "BowmanField_Weather_daily.RData")
+#   Convert date to common format for merging
+    bf.daily.tt$DATE_TIME <- as.Date(bf.daily.tt$DATE_TIME, format = "%Y-%m-%d")
+    EPA_data$Date <- as.Date(EPA_data$Date, format = "%Y-%m-%d")
+#   AQI$Date <- as.Date(AQI$Date, format = "%Y-%m-%d")
+#   AQI_merge <- as.data.frame( left_join(AQI, bf.daily.tt, by = c("Date"="DATE_TIME")))
+#   Merge the two datasets
+    comb_data <- as.data.frame( left_join(EPA_data, bf.daily.tt, by = c("Date"="DATE_TIME")))
+    
+   par(mfrow = c(2, 2))
+         plot(comb_data[comb_data$AQS_PARAMETER_DESC =="PM2.5 - Local Conditions", "mean.temp"], 
+             comb_data[comb_data$AQS_PARAMETER_DESC =="PM2.5 - Local Conditions", "Measurement"],
+             xlab = "Mean Temp. (F)", ylab = expression(PM[2.5] * " (" * mu * g/m^3 * ")"))
+        title(expression(PM[2.5] * " vs. Mean Temp. (1990 - 2017)"))
+        abline(lm(comb_data[comb_data$AQS_PARAMETER_DESC =="PM2.5 - Local Conditions", "Measurement"] ~
+                  comb_data[comb_data$AQS_PARAMETER_DESC =="PM2.5 - Local Conditions", "mean.temp"]), col = "red")
+        # print(cor(comb_data[comb_data$AQS_PARAMETER_DESC =="PM2.5 - Local Conditions", "mean.temp"], 
+        #      comb_data[comb_data$AQS_PARAMETER_DESC =="PM2.5 - Local Conditions", "Measurement"]))
+
+
+        
+           plot(comb_data[comb_data$AQS_PARAMETER_DESC =="PM2.5 - Local Conditions", "mean.spd"], 
+             comb_data[comb_data$AQS_PARAMETER_DESC =="PM2.5 - Local Conditions", "Measurement"],
+             xlab = "Mean Wind Speed", ylab = expression(PM[2.5] * " (" * mu * g/m^3 * ")"))
+        title(expression(PM[2.5] * " vs. Mean Wind Spd. (1990 - 2017)"))
+        abline(lm(comb_data[comb_data$AQS_PARAMETER_DESC =="PM2.5 - Local Conditions", "Measurement"] ~
+                  comb_data[comb_data$AQS_PARAMETER_DESC =="PM2.5 - Local Conditions", "mean.spd"]), col = "red")
+        # print(cor(comb_data[comb_data$AQS_PARAMETER_DESC =="PM2.5 - Local Conditions", "mean.spd"], 
+        #      comb_data[comb_data$AQS_PARAMETER_DESC =="PM2.5 - Local Conditions", "Measurement"]))
+                
+        
+          plot(comb_data[comb_data$AQS_PARAMETER_DESC =="PM2.5 - Local Conditions", "sum.precip"], 
+             comb_data[comb_data$AQS_PARAMETER_DESC =="PM2.5 - Local Conditions", "Measurement"],
+             xlab = "Precipitation (Inches)", ylab = expression(PM[2.5] * " (" * mu * g/m^3 * ")"))
+        title(expression(PM[2.5] * " vs. Precipitation (1990 - 2017)"))
+        abline(lm(comb_data[comb_data$AQS_PARAMETER_DESC =="PM2.5 - Local Conditions", "Measurement"] ~
+                  comb_data[comb_data$AQS_PARAMETER_DESC =="PM2.5 - Local Conditions", "sum.precip"]), col = "red")
+        # print(cor(comb_data[comb_data$AQS_PARAMETER_DESC =="PM2.5 - Local Conditions", "sum.precip"], 
+        #      comb_data[comb_data$AQS_PARAMETER_DESC =="PM2.5 - Local Conditions", "Measurement"]))
+        
+        
+        plot(comb_data[comb_data$AQS_PARAMETER_DESC =="PM2.5 - Local Conditions", "DAILY_AQI_VALUE"], 
+             comb_data[comb_data$AQS_PARAMETER_DESC =="PM2.5 - Local Conditions", "Measurement"],
+             xlab = "Air Quality Index", ylab = expression(PM[2.5] * " (" * mu * g/m^3 * ")"))
+        title(expression(PM[2.5] * " vs. AQI (1990 - 2017)"))
+        abline(lm(comb_data[comb_data$AQS_PARAMETER_DESC =="PM2.5 - Local Conditions", "Measurement"] ~
+                  comb_data[comb_data$AQS_PARAMETER_DESC =="PM2.5 - Local Conditions", "DAILY_AQI_VALUE"]), col = "red")
+        # print(cor(comb_data[comb_data$AQS_PARAMETER_DESC =="PM2.5 - Local Conditions", "DAILY_AQI_VALUE"], 
+        #      comb_data[comb_data$AQS_PARAMETER_DESC =="PM2.5 - Local Conditions", "Measurement"]))     
+        
+```
+
+
+
+Wind Direction
+----
+```{r fig.width=2, fig.height=2, fig.align='center' ,echo=FALSE}
+gg_circle <- function(r, xc, yc, color="black", fill=NA, ...) {
+    x <- xc + r*cos(seq(0, pi, length.out=100))
+    ymax <- yc + r*sin(seq(0, pi, length.out=100))
+    ymin <- yc + r*sin(seq(0, -pi, length.out=100))
+    annotate("ribbon", x=x, ymin=ymin, ymax=ymax, color=color, fill=fill, ...)
+}
+  
+ggplot() +
+  xlim(-1.1,1.1) +
+  ylim(-1.1,1.1) +
+  gg_circle(r=1,xc=0,yc=0) +
+  geom_text(aes(label = "0 deg"),x=0,y=1.1) +
+  geom_text(aes(label = "180 deg"), x=0, y=-1.1) +
+  geom_line(aes(x=c(0,0.707),y=c(0,0.707))) +
+  geom_line(aes(x=c(0,0),y=c(0,0.707)),linetype = 2) +
+  geom_line(aes(x=c(0,0.707),y=c(0.707,0.707)),linetype = 2) +
+  geom_text(aes(label = "dir"), x=0.1,y=0.25) +
+  theme_minimal() + 
+  theme(aspect.ratio = 1,
+        axis.title = element_blank(),
+        axis.text = element_blank(),
+        panel.background = element_blank(),
+        panel.grid = element_blank())
+
+```
+
+$$ sin(dir) = \frac{x}{1} \rightarrow x = sin(dir*\frac{180}{\Pi}) $$
+$$ cos(dir) = \frac{y}{1} \rightarrow y = cos(dir*\frac{180}{\Pi}) $$
+
+
+Autocorrelation Function 
+----
+```{r fig.width=8, fig.height=5.5, fig.align='center' ,echo=FALSE}
+
+par(mfrow=c(3,2))
+  acf(bf.daily.tt$mean.dir.x, na.action = na.pass, lag.max = 365, 
+      main='Mean Wind Dir X')
+  acf(bf.daily.tt$mean.dir.y, na.action = na.pass, lag.max = 365, 
+      main='Mean Wind Dir Y')
+  acf(bf.daily.tt$mean.spd, na.action = na.pass, lag.max = 365, 
+      main='Mean Wind Speed')
+  acf(bf.daily.tt$mean.temp, na.action = na.pass, lag.max = 365, 
+      main='Mean Temperature (F)')
+  acf(bf.daily.tt$sum.precip, na.action = na.pass, lag.max = 365, 
+      main='Daily Precipitation')
+  acf(bf.daily.tt$days.since.precip, na.action = na.pass, lag.max = 365, 
+      main='Days Since Precipitation')
+```
+
+Mean Wind Speed Decomposition
+----
+```{r fig.height = 5.5, fig.width = 8, echo=FALSE}
+start <- bf.daily.tt$DATE_TIME[start(bf.daily.tt$DATE_TIME)[[1]]][[1]]
+bf.mean.spd.ts <- ts(zoo::na.approx(bf.daily.tt$mean.spd), frequency = 365,start = start)
+
+mean.spd.decomp <- decompose(bf.mean.spd.ts, type = "additive")
+par(mfrow=c(3,1))
+plot(mean.spd.decomp$trend, main = "Mean Wind Speed Decomposition", ylab = "Trend")
+plot(mean.spd.decomp$seasonal, ylab = "Seasonal")
+plot(mean.spd.decomp$random, ylab = "Random")
+#plot(mean.spd.decomp$figure)
+```
+
+Holt-Winters
+----
+```{r echo=FALSE, fig.width=8,fig.height=5.5, fig.align='center', message=FALSE, warning=FALSE}
+
+    pm2.5_forecast <- HoltWinters(pm2.5_ts)
+   # summary(forecast(pm2.5_forecast,12))
+   #checkresiduals(pm2.5_forecast)
+    plot(forecast(pm2.5_forecast,12),  xlab="", ylab=expression(PM[2.5] * " (" * mu * g/m^3 * ")"), 
+         main= expression(PM[2.5] * " Forecast (12 months)"), pch=25)
+    abline(h = 12.0, col = "red") 
+    legend("topleft", legend=c("Actual", "Forecast", "EPA guideline"),
+       col=c("black", "blue", "red"), lty=1:1, cex=0.8,
+       box.lty=0)
+
+```
+
+
+
+Conclusions
+----
+- As windspeed increases, Particulate Matter decreases
+
+- As temperature increases, probability of high PM2 increases 
+
+- Heavy rainfall coincides with low PM counts
+
+- Forecast model was not accuarate 
+
+- External factors outisde of weather were not considered
+
+- i.e. regulatory factors
+
+Conclusions
+----
+```{r fig.height = 5.5, fig.width = 8, echo=FALSE}
+
+plot(so2$Date , so2$avg.measurement ,  xlim = range(so2$Date, na.rm = TRUE), 
+         ylim = range(so2$avg.measurement, na.rm = T), xlab = "", ylab = expression(SO[2] * " (ppm)"))
+    title("Sulfur Dioxide (1990 - 2017)")
+     lines( so2$Date  ,  so2$so2_60 , type="l", pch=50, lty=2, col="blue")
+      # legend("topright", legend=c("EPA guideline ", "MA 60 days"),
+      #   col=c("red", "blue"), lty=1:1, cex=0.8,
+      #   box.lty=0)
+    abline(h = 75, col = "red")
+
+```
